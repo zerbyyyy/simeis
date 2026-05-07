@@ -2,64 +2,63 @@ name: Simeis CI
 
 on:
   pull_request:
-    # Déclenchement sur les PR ciblant main ou les branches de release
     branches: [ main, "release/*" ]
   push:
-    # Déclenchement lors du merge final sur main
     branches: [ main ]
 
 jobs:
-  # --- 1. JOB DE QUALITÉ (S'exécute sur les Pull Requests) ---
-  # C'est ce job qu'il faut rendre obligatoire dans les réglages du repo
-  quality:
+  # --- 1. JOB LINT (Python & Rust Format) ---
+  lint:
     if: github.event_name == 'pull_request'
-    name: quality
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout du code
-        uses: actions/checkout@v4
-
-      - name: Rust - Check & Clippy
-        run: |
-          make check
-          cargo clippy -- -D warnings
-
-      - name: Rust - Format Check
+      - uses: actions/checkout@v4
+      - name: Install Ruff
+        run: pip install ruff
+      - name: Python Linting
+        run: ruff check .
+      - name: Rust Format Check
         run: cargo fmt --check
 
+  # --- 2. JOB TEST (Unit Tests) ---
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Rust - Tests unitaires
         run: make test
 
-      - name: Python - Installation de Ruff
-        run: pip install ruff
-      
-      - name: Python - Linting (Ruff)
-        run: ruff check .
-
-  # --- 2. JOB DE PRODUCTION (S'exécute uniquement après le Merge sur main) ---
-  release_and_doc:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    name: release_and_doc
+  # --- 3. JOB BUILD DEV (Compilation simple) ---
+  build_dev:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout du code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Développement - Check & Build
+        run: make build
 
-      - name: Install Typst (Binaire Linux)
+  # --- 4. JOB QUALITY (Clippy & Advanced Checks) ---
+  quality:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust - Clippy
+        run: cargo clippy -- -D warnings
+
+  # --- 5. JOB PRODUCTION (Merge dans main uniquement) ---
+  release_and_doc:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Typst
         run: |
           wget https://github.com/typst/typst/releases/latest/download/typst-x86_64-unknown-linux-musl.tar.xz
           tar -xvf typst-x86_64-unknown-linux-musl.tar.xz
           sudo cp typst-x86_64-unknown-linux-musl/typst /usr/local/bin/
-
-      - name: Compilation du binaire Release
+      - name: Compilation Release
         run: make release
-
-      - name: Génération de la Documentation (Typst)
+      - name: Compilation Documentation
         run: make doc
-        
-      # Optionnel : Tu peux ajouter ici une étape pour uploader le PDF en tant qu'artefact
-      - name: Upload du Manuel PDF
-        uses: actions/upload-artifact@v4
-        with:
-          name: manuel-utilisateur
-          path: doc/manuel.pdf

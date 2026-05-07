@@ -6,6 +6,10 @@ on:
     - cron: '0 0 * * 1'
   workflow_dispatch: # Permet de lancer le bot manuellement pour tester
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   update-dependencies:
     runs-on: ubuntu-latest

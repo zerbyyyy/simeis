@@ -1,11 +1,12 @@
-PORT=8081
-URL=f"http://127.0.0.1:{PORT}"
-
 import sys
 import os
 import json
 import time
 import urllib.request
+
+# Les imports sont maintenant en haut, les constantes suivent
+PORT = 8081
+URL = f"http://127.0.0.1:{PORT}"
 
 if len(sys.argv) > 1:
     PLAYERS = sys.argv[1:]
@@ -18,11 +19,11 @@ HIST = {}
 class SimeisError(Exception):
     pass
 
-NMAX=30
-WIDTH=100
-SCORE="█"
-POTENTIAL="▒"
-VOID=" "
+NMAX = 30
+WIDTH = 100
+SCORE = "█"
+POTENTIAL = "▒"
+VOID = " "
 
 MIN = {}
 MAX = {}
@@ -40,6 +41,8 @@ def mkbar(score, pot, maxs):
     return (SCORE * nbs) + (POTENTIAL * nbp) + (VOID * nvoid)
 
 def get(path):
+    # On déclare HIST et INIT comme globaux pour pouvoir les modifier
+    global HIST, INIT
     qry = f"{URL}/{path}"
     while True:
         try:
@@ -48,8 +51,7 @@ def get(path):
         except Exception as err:
             os.system("clear")
             HIST = {}
-            INIT=False
-            # breakpoint()
+            INIT = False
             print("DEAD SERVER")
             print(err)
             time.sleep(4)
@@ -73,7 +75,7 @@ def get_market():
 
 def disp_market(resources):
     market = get_market()
-    max_res_len = max([len(k) for k in market.keys()])
+    # On retire max_res_len et space qui étaient inutilisés (F841)
     disp = {}
     for (res, price) in market.items():
         if price is None or price < 0:
@@ -82,7 +84,6 @@ def disp_market(resources):
         MAX[res] = round(max(MAX[res], price), 2)
         relp = round((price / resources[res]["base-price"]) * 100, 2)
         price = round(price, 3)
-        space = " "*(1 + max_res_len - len(res))
 
         disp[res] = {
             "head": f"{price}",
@@ -93,19 +94,21 @@ def disp_market(resources):
     max_res = max([len(r) for r in disp.keys()])
     max_head = max([len(d["head"]) for _, d in disp.items()])
     max_mid = max([len(d["mid"]) for _, d in disp.items()])
-    max_tail = max([len(d["tail"]) for _, d in disp.items()])
 
     buffer = ""
     for res, d in disp.items():
+        # Correction du .format() : on avait 7 paires d'accolades mais 8 arguments fournis (ou inversement)
+        # J'ai réduit à 7 arguments correspondant aux 7 {}
         buffer += "{}{}{}{}{}{}{}".format(
             res, " " * (max_res + 1 - len(res)),
             d["head"], " " * (max_head + 1 - len(d["head"])),
             d["mid"], " " * (max_mid + 1 - len(d["mid"])),
-            d["tail"], " " * (max_tail + 1 - len(d["tail"])),
+            d["tail"]
         ) + "\n"
 
     return buffer
 
+# Initialisation des ressources
 resources = get_resources()
 for (res, data) in resources.items():
     MIN[res] = data["base-price"]
@@ -129,9 +132,11 @@ while True:
 
     buffer += "{} Players still in the game ".format(len([True for p in info.values() if not p["lost"]]))
     buffer += "({} players lost)\n".format(len([True for p in info.values() if p["lost"]]))
+    
     players = sorted(info.items(), key=lambda p: p[1]["score"] + p[1]["potential"], reverse=True)[:NMAX]
     max_score = max([max(v["score"], 0) + v["potential"] for v in info.values()])
     maxn = max([len(data["name"]) for (_, data) in players])
+    
     for (player, data) in players:
         if PLAYERS is not None and data["name"] not in PLAYERS:
             continue

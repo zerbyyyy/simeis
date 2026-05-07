@@ -20,7 +20,7 @@ optimize:
 
 # Documentation
 doc:
-	typst compile manuel.typ manuel.pdf
+	typst compile doc/manuel.typ manuel.pdf
 
 # Checks
 check:

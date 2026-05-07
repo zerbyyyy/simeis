@@ -1,3 +1,3 @@
 # Simeis
 
-Jeu par API
+Jeu par APIDémonstration du système de propagation automatique

@@ -399,7 +399,7 @@ impl Station {
 
     pub fn get_ship_upgrade_price(&self, _ship: &Ship, upgrade: &ShipUpgrade) -> f64 {
         // TODO (#9) Modify price based on station economy metrics
-        upgrade.get_price_buy()
+        upgrade.get_price()
     }
     
     pub async fn get_cargo_potential_price(&self, id: &PlayerId) -> f64 {

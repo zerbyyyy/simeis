@@ -57,7 +57,7 @@ def create_issue(number, title, body, labels):
             "--body", body,
             "--label", labels
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         print(f"✓ Issue #{number} created")
         return True
     except subprocess.CalledProcessError as e:

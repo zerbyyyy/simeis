@@ -399,8 +399,9 @@ impl Station {
 
     pub fn get_ship_upgrade_price(&self, _ship: &Ship, upgrade: &ShipUpgrade) -> f64 {
         // TODO (#9) Modify price based on station economy metrics
-        
-
+        upgrade.get_price_buy()
+    }
+    
     pub async fn get_cargo_potential_price(&self, id: &PlayerId) -> f64 {
         let Some(pd) = self.player_data.clone_val(id).await else {
             return 0.0;

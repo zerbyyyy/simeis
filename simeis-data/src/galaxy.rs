@@ -258,13 +258,21 @@ pub fn translation(start: SpaceCoord, direction: (f64, f64, f64), dist: f64) -> 
     )
 }
 
+// Vérifie qu'une coordonnée appartient à un secteur.
+//
+// On compare l'offset depuis le début du secteur plutôt que de tester
+// `coord < end`, ce qui évite le faux-négatif lorsque `saturating_add`
+// a saturé `end` à `u32::MAX` et que `coord` vaut également `u32::MAX`.
+//
+//   coord.0.wrapping_sub(sector.0.0) < SECTOR_SIZE.0
+//
+// Fonctionne car `start <= coord` est garanti par la construction du secteur
+// (`start = coord - coord % SIZE`), donc le wrapping_sub retourne l'offset
+// exact sans jamais déborder dans la pratique.
 fn is_in_sector(coord: &SpaceCoord, sector: &GalaxySector) -> bool {
-    coord.0 >= sector.0 .0
-        && coord.0 < sector.0 .1
-        && coord.1 >= sector.1 .0
-        && coord.1 < sector.1 .1
-        && coord.2 >= sector.2 .0
-        && coord.2 < sector.2 .1
+    coord.0.wrapping_sub(sector.0 .0) < SECTOR_SIZE.0
+        && coord.1.wrapping_sub(sector.1 .0) < SECTOR_SIZE.1
+        && coord.2.wrapping_sub(sector.2 .0) < SECTOR_SIZE.2
 }
 
 fn sectors_around(center: &SpaceCoord, radius: f64) -> Vec<GalaxySector> {
@@ -316,7 +324,11 @@ fn get_rand_coord_near(obj: &SpaceCoord, dist: f64, rng: &mut ThreadRng) -> Spac
     let x = (obj.0 as f64) + (dist * phi.sin() * theta.cos());
     let y = (obj.1 as f64) + (dist * phi.sin() * theta.sin());
     let z = (obj.2 as f64) + (dist * phi.cos());
-    (x as u32, y as u32, z as u32)
+    (
+        x.clamp(0.0, u32::MAX as f64) as u32,
+        y.clamp(0.0, u32::MAX as f64) as u32,
+        z.clamp(0.0, u32::MAX as f64) as u32,
+    )
 }
 
 #[test]

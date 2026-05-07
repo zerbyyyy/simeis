@@ -239,7 +239,6 @@ pub fn get_direction(a: &SpaceCoord, b: &SpaceCoord) -> (f64, f64, f64) {
     (delta.0 / distance, delta.1 / distance, delta.2 / distance)
 }
 
-// TODO (#13)   Unit tests on this one
 fn compute_sector(x: SpaceUnit, y: SpaceUnit, z: SpaceUnit) -> GalaxySector {
     let start_x = x - (x % SECTOR_SIZE.0);
     let end_x = start_x.saturating_add(SECTOR_SIZE.0);

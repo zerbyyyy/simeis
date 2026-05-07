@@ -135,10 +135,6 @@ impl Ship {
         }
     }
 
-    // TODO (#9) Create a new ship with random specs, with specs between +/- 20% base price
-    //     Change it every X minutes
-    //     Used by traders to seek nice ships to buy
-
     // Public data of this ship to display on the marketplace
     pub fn market_data(&self) -> serde_json::Value {
         serde_json::json!({
@@ -374,9 +370,5 @@ fn test_ship_flight() {
                     || (costs.hull_usage > ship.hull_resistance)
             );
         }
-        // TODO (#13) Check hull
-        // TODO (#13) Check fuel
-        // TODO (#13) Check arrived
-        // TODO (#13) Check distance
     });
 }

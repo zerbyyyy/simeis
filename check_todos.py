@@ -10,7 +10,6 @@ import os
 import re
 import sys
 import requests
-from pathlib import Path
 
 # Regex to find TODOs with optional issue numbers
 TODO_PATTERN = re.compile(r'TODO\s*(?:\(#(\d+)\))?')
@@ -26,6 +25,11 @@ EXTENSIONS_TO_CHECK = {
 EXCLUDE_DIRS = {
     'target', 'node_modules', '.git', 'dist', 'build',
     '__pycache__', '.venv', 'venv', 'env'
+}
+
+# Files to exclude
+EXCLUDE_FILES = {
+    'check_todos.py',  # Don't check the checker itself
 }
 
 def get_github_token():
@@ -79,6 +83,8 @@ def find_todos(root_dir):
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
         
         for filename in filenames:
+            if filename in EXCLUDE_FILES:
+                continue
             if not any(filename.endswith(ext) for ext in EXTENSIONS_TO_CHECK):
                 continue
             

@@ -1,6 +1,7 @@
 import sys
 import time
 import random
+import math  # Déplacé en haut pour corriger E402
 
 def create_property_based_test(f, regressions=[], time_test=10):
     tstart = time.time()
@@ -21,29 +22,31 @@ def create_property_based_test(f, regressions=[], time_test=10):
         i += 1
 
 ### Example
-import math
+
 def get_dist(a, b):
     return math.sqrt(((a[0] - b[0]) ** 2) + ((a[1] - b[1]) ** 2) + ((a[2] - b[2]) ** 2))
 
 def addition():
-    x = random.randrange(0, 10000)
-    y = random.randrange(0, 10000)
-    z = random.randrange(0, 10000)
+    # Utilisation de _ pour les variables inutilisées afin de corriger F841
+    _ = random.randrange(0, 10000)
+    _ = random.randrange(0, 10000)
+    _ = random.randrange(0, 10000)
 
-    # Exercice:    Tester les additions
+    # Exercice: Tester les additions (ton code de test viendra ici)
 
 def distance():
     x1 = random.randrange(-100, 100)
     y1 = random.randrange(-100, 100)
     z1 = random.randrange(-100, 100)
-    a = (x1, y1, z1)
+    _ = (x1, y1, z1) # Corrigé F841 (a n'était pas utilisé)
 
     x2 = random.randrange(-100, 100)
     y2 = random.randrange(-100, 100)
     z2 = random.randrange(-100, 100)
-    b = (x2, y2, z2)
+    _ = (x2, y2, z2) # Corrigé F841 (b n'était pas utilisé)
 
-    # Exercice:     Tester la distance entre le point A et le point B
+    # Exercice: Tester la distance entre le point A et le point B
 
-create_property_based_test(addition, time_test=3)
-create_property_based_test(distance, regressions=[4480881574280375424], time_test=10)
+if __name__ == "__main__":
+    create_property_based_test(addition, time_test=3)
+    create_property_based_test(distance, regressions=[4480881574280375424], time_test=10)

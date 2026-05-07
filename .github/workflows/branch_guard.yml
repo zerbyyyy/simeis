@@ -1,0 +1,27 @@
+name: Branch Guard
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  enforce-branching:
+    runs-on: ubuntu-latest
+    # On ne lance ce job que si la cible est release/x
+    if: startsWith(github.base_ref, 'release/')
+    steps:
+      - name: Check Source Branch
+        id: check
+        run: |
+          SOURCE=${{ github.head_ref }}
+          if [[ "$SOURCE" == "main" ]] || [[ "$SOURCE" == bug/* ]]; then
+            echo "valid=true" >> $GITHUB_OUTPUT
+          else
+            echo "valid=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Close PR if invalid
+        if: steps.check.outputs.valid == 'false'
+        uses: superbrothers/close-pull-request@v3
+        with:
+          comment: "❌ PR fermée automatiquement. Les branches 'release/*' ne peuvent accepter que des merges venant de 'main' ou 'bug/*'."

@@ -1,0 +1,30 @@
+name: Quality & Linting
+
+on:
+  pull_request: # Déclenchement à chaque modif d'une PR (Point 3)
+    branches:
+      - '*' # Quelle que soit la branche ciblée
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust Check
+        run: cargo check
+
+      - name: Rust Format Check
+        run: cargo fmt --check
+
+      - name: Rust Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Install Python & Ruff
+        # Ruff est l'outil le plus rapide et standard aujourd'hui pour Python (Point 2)
+        run: |
+          pip install ruff
+      
+      - name: Python Linting (Ruff)
+        # On vérifie les dossiers de tests ou scripts python
+        run: ruff check .

@@ -1,3 +1,7 @@
+[features]
+default = []
+heavy-testing = []
+
 [workspace]
 resolver = "2"
 members = ["simeis-data", "simeis-server"]

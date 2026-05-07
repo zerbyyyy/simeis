@@ -48,7 +48,7 @@ def test_binary_exists() -> None:
 
 def test_placeholder() -> None:
     """Test fonctionnel à compléter — retourne toujours succès pour l'instant."""
-    # TODO remplacer par un vrai scénario fonctionnel
+    # TODO remplacer par un vrai scénario fonctionnel → Issue #19
     pass
 
 

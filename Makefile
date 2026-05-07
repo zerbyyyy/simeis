@@ -12,11 +12,11 @@ build:
 # Build de production (utilisé par la CI)
 release:
 	cargo build --release --verbose
-	strip target/release/simeis
+	strip target/release/simeis-server
 
 # Optimisation
 optimize:
-	strip target/debug/simeis
+	strip target/debug/simeis-server
 
 # Documentation
 doc:

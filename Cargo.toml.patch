@@ -1,0 +1,11 @@
+# Extrait Cargo.toml — ajoute ces lignes à ton fichier existant
+# ─────────────────────────────────────────────────────────────
+
+[features]
+default = []
+
+# Feature réservée aux tests lourds lancés dans le workflow CI release/*.
+# Elle n'active aucune dépendance pour l'instant ; les tests pourront
+# l'interroger via #[cfg(feature = "heavy-testing")] pour conditionner
+# du code de test coûteux à n'exécuter qu'en CI.
+heavy-testing = []

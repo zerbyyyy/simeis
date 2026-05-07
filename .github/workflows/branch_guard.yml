@@ -4,24 +4,39 @@ on:
   pull_request:
     types: [opened, edited, synchronize]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
-  enforce-branching:
+  check-rules:
     runs-on: ubuntu-latest
-    # On ne lance ce job que si la cible est release/x
-    if: startsWith(github.base_ref, 'release/')
     steps:
-      - name: Check Source Branch
-        id: check
+      - name: Analyse de la situation
+        id: gatekeeper
         run: |
-          SOURCE=${{ github.head_ref }}
-          if [[ "$SOURCE" == "main" ]] || [[ "$SOURCE" == bug/* ]]; then
-            echo "valid=true" >> $GITHUB_OUTPUT
+          TARGET="${{ github.base_ref }}"
+          SOURCE="${{ github.head_ref }}"
+          
+          echo "Cible : $TARGET"
+          echo "Source : $SOURCE"
+
+          # CONDITION : Si la cible est une release
+          if [[ "$TARGET" == release/* ]]; then
+            # On vérifie si la source est autorisée
+            if [[ "$SOURCE" == "main" ]] || [[ "$SOURCE" == bug/* ]]; then
+              echo "status=ok" >> $GITHUB_OUTPUT
+            else
+              echo "status=fail" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "valid=false" >> $GITHUB_OUTPUT
+            # Si on ne cible pas une release, tout est autorisé par ce workflow
+            echo "status=ok" >> $GITHUB_OUTPUT
           fi
 
-      - name: Close PR if invalid
-        if: steps.check.outputs.valid == 'false'
+      - name: Fermeture si non conforme
+        if: steps.gatekeeper.outputs.status == 'fail'
         uses: superbrothers/close-pull-request@v3
         with:
-          comment: "❌ PR fermée automatiquement. Les branches 'release/*' ne peuvent accepter que des merges venant de 'main' ou 'bug/*'."
+          comment: |
+            ❌ **PR Refusée** : Une branche `release/*` ne peut accepter du code que depuis `main` ou `bug/*`.

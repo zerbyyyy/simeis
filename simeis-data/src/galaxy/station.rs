@@ -398,7 +398,7 @@ impl Station {
     }
 
     pub fn get_ship_upgrade_price(&self, _ship: &Ship, upgrade: &ShipUpgrade) -> f64 {
-        // TODO Modify price based on station economy metrics → Issue #29
+        // TODO (#29) Modify price based on station economy metrics
         upgrade.get_price()
     }
 

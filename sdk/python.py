@@ -218,8 +218,8 @@ class SimeisSDK:
     def start_extraction(self, ship_id):
         return self.post(f"/ship/{ship_id}/extraction/start")
 
-    # TODO Unload → Issue #20
-    # TODO Unload_all → Issue #20
+    # TODO (#20) Unload
+    # TODO (#20)Unload_all
     def return_station_and_unload_all(self, sta, ship_id):
         ship = self.get(f"/ship/{ship_id}")
         station = self.get(f"/station/{sta}")
@@ -239,7 +239,7 @@ class SimeisSDK:
     def buy_resource(self, sta, res, amnt):
         return self.post(f"/market/{sta}/buy/{res}/{amnt}")
 
-    # TODO get_syslogs → Issue #21
-    # TODO Add resources info → Issue #21
-    # TODO Get ship wages cost → Issue #21
-    # TODO Industry → Issue #21
+    # TODO (#21) get_syslogs
+    # TODO (#21) Add resources info
+    # TODO (#21) Get ship wages cost
+    # TODO (#21) Industry

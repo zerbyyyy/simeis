@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-Script pour créer les issues GitHub manquantes pour les TODOs.
-Exécutez ce script après avoir authentifié GitHub CLI:
-  gh auth login
-  python create_missing_issues.py
-"""
 
 import subprocess
 import sys

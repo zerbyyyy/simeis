@@ -1,0 +1,33 @@
+name: Bugfix Propagation
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main # On ne déclenche que si on merge dans main
+
+jobs:
+  propagate-bugfix:
+    # On ne lance le job que si la PR est mergée ET qu'elle vient d'une branche bug/*
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'bug/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Nécessaire pour avoir l'historique et changer de branche
+
+      - name: Backport to Release branches
+        uses: korthout/backport-action@v3
+        with:
+          # L'action va chercher les labels de type "propagate:release/v1"
+          label_pattern: '^propagate:(.+)$'
+          # On définit comment extraire le nom de la branche cible du label
+          target_branches_extract_pattern: '^propagate:(.+)$'
+          pull_description: |
+            Automatic propagation of bugfix from #${{ github.event.pull_request.number }}
+            Source branch: ${{ github.event.pull_request.head.ref }}

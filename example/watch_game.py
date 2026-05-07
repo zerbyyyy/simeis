@@ -94,7 +94,6 @@ def disp_market(resources):
     max_res = max([len(r) for r in disp.keys()])
     max_head = max([len(d["head"]) for _, d in disp.items()])
     max_mid = max([len(d["mid"]) for _, d in disp.items()])
-    max_tail = max([len(d["tail"]) for _, d in disp.items()])
 
     buffer = ""
     for res, d in disp.items():

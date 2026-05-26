@@ -29,18 +29,9 @@ check:
 test:
 	cargo test
 
-# Tests fonctionnels lourds
-functional-tests: release
-	@echo "Running functional tests..."
-	python tests/functional_tests.py
-
-# Valider la configuration des tests
-validate-tests:
-	bash tests/validate_tests.sh
-
 # Nettoyage
 clean:
 	cargo clean
 	rm -f manuel.pdf
 
-.PHONY: all build release optimize doc check test functional-tests validate-tests clean
+.PHONY: all build release optimize doc check test clean

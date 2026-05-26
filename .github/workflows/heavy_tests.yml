@@ -1,0 +1,58 @@
+name: Tests Fonctionnels Lourds (Simeis)
+
+on:
+  # Exécuter avant publication de release
+  push:
+    branches: [ "release/*" ]
+  
+  # Exécuter sur demande manuelle via l'interface GitHub
+  workflow_dispatch:
+
+jobs:
+  # --- Job : Tests Fonctionnels ---
+  functional_tests:
+    name: Tests Fonctionnels Simeis
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Checkout du code
+      - uses: actions/checkout@v4
+      
+      # 2. Installer les dépendances Python
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      
+      # 3. Installer les dépendances Python requises pour les tests
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+      
+      # 4. Compiler le serveur en release
+      - name: Build Release Server
+        run: make release
+        timeout-minutes: 30
+      
+      # 5. Exécuter les tests fonctionnels
+      - name: Run Functional Tests
+        run: python tests/functional_tests.py
+        timeout-minutes: 15
+      
+      # 6. Archiver les résultats (optionnel)
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            tests/functional_tests.py
+            target/release/simeis-server
+        retention-days: 7
+  
+  # --- Job : Tests de Performance (optionnel) ---
+  # À implémenter : tests de charge, benchmarks, etc.
+
+# --- Stratégies de notification ---
+# Vous pouvez ajouter des notifications Slack, email, etc. en cas d'échec

@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
 """
 tests/functional_tests.py
-Squelette des tests fonctionnels automatiques.
-
-Exécution :
-    python tests/functional_tests.py
-
-Le script doit retourner le code de sortie 0 pour que le workflow CI
-considère les tests comme réussis (vérification implicite par GitHub Actions).
-
-Conventions :
-- Chaque cas de test est une fonction préfixée par `test_`.
-- run_all_tests() appelle toutes les fonctions de test et agrège les résultats.
-- En cas d'échec, le script se termine avec sys.exit(1).
+Tests fonctionnels automatiques pour le workspace Simeis.
 """
 
 import subprocess
 import sys
 from pathlib import Path
 
-# ─── Chemin vers le binaire compilé en debug ────────────────────────────────
-# Adapter le nom du binaire selon le champ `name` de [package] dans Cargo.toml
-BINARY = Path("target/debug/my_project")
+# ─── Chemin vers le binaire compilé du workspace ───────────────────────────
+BINARY = Path("target/debug/simeis-server")
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -42,14 +30,43 @@ def assert_exit_code(result: subprocess.CompletedProcess, expected: int = 0) -> 
 # ─── Tests fonctionnels ─────────────────────────────────────────────────────
 
 def test_binary_exists() -> None:
-    """Vérifie que le binaire debug a bien été compilé."""
-    assert BINARY.exists(), f"Binaire introuvable : {BINARY}"
+    """Vérifie que le binaire simeis-server a bien été compilé."""
+    assert BINARY.exists(), f"Binaire introuvable : {BINARY}. Lancez 'cargo build' d'abord."
 
 
-def test_placeholder() -> None:
-    """Test fonctionnel à compléter — retourne toujours succès pour l'instant."""
-    # TODO (#19) remplacer par un vrai scénario fonctionnel
-    pass
+def test_scenario_1_economy() -> None:
+    """Scénario 1 : Création joueur -> Achat vaisseau -> Achat module."""
+    # 1. Création du joueur
+    # Ajuste les arguments ("player", "create", etc.) selon tes structures Rust
+    res_player = run([str(BINARY), "player", "create", "Evan"])
+    assert_exit_code(res_player, 0)
+    assert "Evan" in res_player.stdout, "Le joueur n'a pas été créé correctement"
+    
+    # 2. Achat du vaisseau
+    res_ship = run([str(BINARY), "player", "buy-ship", "Explorer"])
+    assert_exit_code(res_ship, 0)
+    assert "Succès" in res_ship.stdout or "réussi" in res_ship.stdout, "L'achat du vaisseau a échoué"
+    
+    # 3. Achat d'un module de minage
+    res_module = run([str(BINARY), "player", "buy-module", "Miner"])
+    assert_exit_code(res_module, 0)
+
+
+def test_scenario_2_mechanics() -> None:
+    """Scénario 2 : Deuxième mécanique (ex: Voyage ou Minage)."""
+    # Remplace "travel" ou "mine" par une vraie commande de ton application
+    res = run([str(BINARY), "ship", "travel", "Simeis-Alpha"])
+    assert_exit_code(res, 0)
+
+
+def test_scenario_3_errors() -> None:
+    """Scénario 3 : Troisième mécanique - Test des limites économiques."""
+    # Tenter d'acheter un objet trop cher pour forcer un refus propre
+    res = run([str(BINARY), "player", "buy-ship", "DeathStar"])
+    
+    # On attend un code d'erreur ou un message "Fonds insuffisants"
+    assert "insuffisants" in res.stdout or "insuffisants" in res.stderr, \
+        "La transaction aurait dû être refusée pour manque de fonds"
 
 
 # ─── Runner ─────────────────────────────────────────────────────────────────
@@ -71,7 +88,7 @@ def run_all_tests() -> int:
 
 
 if __name__ == "__main__":
-    print("=== Tests fonctionnels ===")
+    print("=== Tests fonctionnels (simeis-server) ===")
     nb_failures = run_all_tests()
     print(f"\n{'OK' if nb_failures == 0 else 'ÉCHEC'} — {nb_failures} échec(s)")
     sys.exit(0 if nb_failures == 0 else 1)

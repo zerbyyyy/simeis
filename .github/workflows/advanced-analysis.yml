@@ -14,23 +14,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Utilisation de l'action de base checkout explicitement autorisée
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      # Remplacement de dtolnay/rust-toolchain par une installation manuelle par script (Consigne TP)
+      - name: Install Rust toolchain (Stable)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
+      # Note : L'action actions/cache a été retirée car les actions tierces du marketplace sont interdites
       - name: Run unit tests with feature heavy-testing
         run: cargo test --features heavy-testing
 
@@ -43,35 +37,27 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain (Stable)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # L'environnement ubuntu-latest intègre déjà Python 3 par défaut, 
+      # ce qui permet de se passer de l'action marketplace setup-python.
 
       - name: Compile project (debug) with feature heavy-testing
         run: cargo build --features heavy-testing
 
+      # Partie 1.3 du TP : Liaison du script de tests fonctionnels à la CI lourde
       - name: Run functional test script
-        run: python tests/functional_tests.py
+        run: python3 tests/functional_tests.py
 
-      # La step échoue automatiquement si le script retourne un code != 0,
-      # ce qui constitue la vérification du succès de l'exécution.
+      # Partie 3.4 du TP : Liaison de la version lourde du test property-based (--heavy)
+      # Ce test s'exécutera de manière intensive sur chaque push de release
+      - name: Run heavy property-based tests
+        run: python3 tests/propertybased.py --heavy
 
   # ─────────────────────────────────────────────
   # Job 3 : Analyse approfondie du code
@@ -83,21 +69,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install Rust toolchain (nightly requis pour cargo-udeps)
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-nightly-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-nightly-
+      # Installation manuelle de la version Nightly de Rust requise pour cargo-udeps
+      - name: Install Rust toolchain (Nightly)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       # ── cargo-audit ───────────────────────────
       - name: Install cargo-audit
@@ -110,5 +88,6 @@ jobs:
       - name: Install cargo-udeps
         run: cargo install cargo-udeps --locked
 
+      # Analyse des dépendances inutilisées avec la version Nightly configurée plus haut
       - name: Check for unused dependencies
         run: cargo +nightly udeps --all-targets

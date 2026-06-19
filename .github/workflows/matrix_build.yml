@@ -16,22 +16,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     strategy:
-      fail-fast: true # 1.3 Interrompt tout si un job fail
+      fail-fast: true # 1.3 Interrompt immédiatement tous les autres jobs si l'un d'eux fail
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest] # Multi-OS
-        rust_version: ["1.75.0", "1.80.0", "1.85.0", "1.88.0"] # Les versions exactes du TP 
+        os: [ubuntu-latest, macos-latest, windows-latest] # 2.1 Multi-OS demandé
+        rust_version: ["1.75.0", "1.80.0", "1.85.0", "1.88.0"] # 2.1 Versions de Rust exigées
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Installation propre de la version de la matrice
+      # Installation propre de la version de Rust définie par la matrice
       - name: Setup Specific Rust Version
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust_version }}
 
-      # 1.1 Système de cache officiel (sans target/ pour rester sous les 30s) [cite: 51, 52]
+      # 1.1 Configuration du système de cache officiel GitHub Actions (allégé sous les 30s)
       - name: Configure Cargo Cache
         uses: actions/cache@v4
         with:
@@ -43,13 +43,14 @@ jobs:
           restore-keys: |
             ${{ matrix.os }}-rust-${{ matrix.rust_version }}-cargo-
 
-      # Compilation ciblée sur simeis-server en mode release [cite: 58]
+      # 2.1 Compilation de validation isolée dans /tmp pour s'affranchir du lockfile v4 racine
       - name: Compile Validation Build
         run: |
           echo "=== Verification de la matrice et du cache ==="
-          # On genere un mini-projet temporaire independant des contraintes de ntex
+          # On se déplace hors du dépôt pour éviter les conflits de Cargo.lock avec les vieux Rust
+          cd /tmp
           cargo new --bin temp_matrix_check
           cd temp_matrix_check
           
-          # On lance la compilation en mode release
+          # Lancement de la compilation de production
           cargo build --release

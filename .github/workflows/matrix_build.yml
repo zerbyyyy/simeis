@@ -19,7 +19,7 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust_version: ["1.75.0", "1.80.0", "1.85.0", "1.88.0"]
+        rust_version: ["1.80.0", "1.83.0", "1.85.0", "1.88.0"]
 
     steps:
       - name: Checkout code

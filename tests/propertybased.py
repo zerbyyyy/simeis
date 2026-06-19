@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 tests/propertybased.py
-Tests basés sur les propriétés (TP3 - Partie 3)
 """
 
 import sys

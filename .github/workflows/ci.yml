@@ -6,8 +6,13 @@ on:
   push:
     branches: [ main ]
 
-# --- Gestion des interruptions de flux (TP3 - Partie 3.5 & TP4) ---
-# Annule automatiquement les builds obsolètes si un nouveau commit est poussé
+# --- Optimisations globales (TP4) ---
+# Force Rust à optimiser les builds incrémentaux et active la couleur dans les terminaux de la CI
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "1"
+
+# Annule automatiquement les builds obsolètes si un nouveau commit est poussé (TP3.5 & TP4)
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
@@ -38,6 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      # Configuration du cache de compilation local (TP4)
+      - name: Install and Setup Precompiled sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv sccache-v0.8.2-x86_64-unknown-linux-musl/sccache /usr/local/bin/
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+
       - name: Rust - Tests unitaires
         run: make test
 
@@ -45,14 +59,29 @@ jobs:
       - name: Python - Property-Based Testing (Quick)
         run: python3 tests/propertybased.py
 
+      - name: Show Cache Stats
+        run: sccache --show-stats
+
   # --- 3. JOB BUILD DEV (Compilation simple) ---
   build_dev:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install and Setup Precompiled sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv sccache-v0.8.2-x86_64-unknown-linux-musl/sccache /usr/local/bin/
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+
       - name: Développement - Check & Build
         run: make build
+
+      - name: Show Cache Stats
+        run: sccache --show-stats
 
   # --- 4. JOB QUALITY (Clippy & Advanced Checks) ---
   quality:
@@ -64,18 +93,18 @@ jobs:
         run: cargo clippy -- -D warnings
 
   # --- 5. JOB COVERAGE (TP3 - Partie 2) ---
-  # Ce job vérifie le taux de couverture et applique le label via 'gh' si < 50%
   coverage:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # OPTIMISATION (TP4) : Téléchargement du binaire pré-compilé pour éviter 10 minutes de compilation
+      # OPTIMISATION SÉCURISÉE (TP4) : Téléchargement du binaire pré-compilé officiel (Zéro erreur 404)
       - name: Install Precompiled cargo-tarpaulin
         run: |
-          wget https://github.com/xdg-acme/cargo-tarpaulin/releases/download/0.27.3/cargo-tarpaulin-0.27.3-musl.tar.gz
-          tar -xvf cargo-tarpaulin-0.27.3-musl.tar.gz
+          echo "=== Téléchargement direct de cargo-tarpaulin ==="
+          wget https://github.com/xd009642/tarpaulin/releases/download/0.27.3/cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz
           sudo mv cargo-tarpaulin /usr/local/bin/
           cargo tarpaulin --version
 

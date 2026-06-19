@@ -47,4 +47,4 @@ jobs:
       - name: Compile Simeis in Release Mode
         run: |
           echo "=== Lancement de la compilation de production ==="
-          cargo build --release --manifest-path simeis-server/Cargo.toml
+          cargo build --release --manifest-path simeis-server/Cargo.toml --locked

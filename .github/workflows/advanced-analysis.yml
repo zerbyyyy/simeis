@@ -14,19 +14,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Utilisation de l'action de base checkout explicitement autorisée
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      # Remplacement de dtolnay/rust-toolchain par une installation manuelle par script (Consigne TP)
-      - name: Install Rust toolchain (Stable)
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      # Note : L'action actions/cache a été retirée car les actions tierces du marketplace sont interdites
+      # Utilisation du compilateur stable préinstallé par défaut sur la VM
       - name: Run unit tests with feature heavy-testing
-        run: cargo test --features heavy-testing
+        run: cargo test --features heavy-testing --verbose
 
   # ─────────────────────────────────────────────
   # Job 2 : Tests fonctionnels (build debug + script Python)
@@ -37,25 +30,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain (Stable)
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      # L'environnement ubuntu-latest intègre déjà Python 3 par défaut, 
-      # ce qui permet de se passer de l'action marketplace setup-python.
+        uses: actions/checkout@v4
 
       - name: Compile project (debug) with feature heavy-testing
-        run: cargo build --features heavy-testing
+        run: cargo build --features heavy-testing --verbose
 
-      # Partie 1.3 du TP : Liaison du script de tests fonctionnels à la CI lourde
       - name: Run functional test script
         run: python3 tests/functional_tests.py
 
-      # Partie 3.4 du TP : Liaison de la version lourde du test property-based (--heavy)
-      # Ce test s'exécutera de manière intensive sur chaque push de release
       - name: Run heavy property-based tests
         run: python3 tests/propertybased.py --heavy
 
@@ -69,25 +51,35 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      # Installation manuelle de la version Nightly de Rust requise pour cargo-udeps
+      # Installation de la version Nightly de Rust requise pour cargo-udeps
       - name: Install Rust toolchain (Nightly)
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
+          rustup toolchain install nightly --profile minimal
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      # ── cargo-audit ───────────────────────────
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+      # Installation de cargo-audit (Version binaire pré-compilée très rapide)
+      - name: Download and Install Precompiled cargo-audit
+        run: |
+          echo "=== Récupération du binaire pré-compilé de cargo-audit ==="
+          wget https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.20.0/cargo-audit-x86_64-unknown-linux-gnu-v0.20.0.tgz
+          tar -xvf cargo-audit-x86_64-unknown-linux-gnu-v0.20.0.tgz
+          sudo mv x86_64-unknown-linux-gnu/cargo-audit /usr/local/bin/
+          cargo audit --version
 
       - name: Audit security of dependencies
         run: cargo audit
 
-      # ── cargo-udeps ───────────────────────────
-      - name: Install cargo-udeps
-        run: cargo install cargo-udeps --locked
+      # Installation de cargo-udeps (Version binaire pré-compilée très rapide)
+      - name: Download and Install Precompiled cargo-udeps
+        run: |
+          echo "=== Récupération du binaire pré-compilé de cargo-udeps ==="
+          wget https://github.com/est31/cargo-udeps/releases/download/v0.1.50/cargo-udeps-v0.1.50-x86_64-unknown-linux-gnu.tar.gz
+          tar -xvf cargo-udeps-v0.1.50-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv cargo-udeps-v0.1.50-x86_64-unknown-linux-gnu/cargo-udeps /usr/local/bin/
+          cargo udeps --version
 
-      # Analyse des dépendances inutilisées avec la version Nightly configurée plus haut
+      # Détection des crates inutilisées avec le compilateur Nightly
       - name: Check for unused dependencies
         run: cargo +nightly udeps --all-targets

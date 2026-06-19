@@ -11,23 +11,18 @@ on:
 
 jobs:
   check-todos:
+    name: Analyse des commentaires TODO
     runs-on: ubuntu-latest
     
     steps:
+      # Seule action du marketplace officiellement autorisée dans le sujet
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-      
-      - name: Check TODOs
+      # On utilise directement le Python de la machine virtuelle sans passer par une action du marketplace
+      - name: Check TODOs Status
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python check_todos.py
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x check_todos.py
+          python3 check_todos.py

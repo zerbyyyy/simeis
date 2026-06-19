@@ -4,30 +4,96 @@ on:
   pull_request:
     types: [closed]
     branches:
-      - main # On ne déclenche que si on merge dans main
+      - main # Déclenchement lors d'une fermeture sur la branche principale
 
 jobs:
   propagate-bugfix:
-    # On ne lance le job que si la PR est mergée ET qu'elle vient d'une branche bug/*
+    name: Propagation Automatique de Correctif
+    # Exécution uniquement si la PR est fusionnée ET provient d'une branche de bug
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'bug/')
     runs-on: ubuntu-latest
+    
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      - name: Checkout du code
+      # Récupération de l'historique complet indispensable pour exécuter un cherry-pick ou un rebase local
+      - name: Checkout du code source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Nécessaire pour avoir l'historique et changer de branche
+          fetch-depth: 0
 
-      - name: Backport to Release branches
-        uses: korthout/backport-action@v3
-        with:
-          # L'action va chercher les labels de type "propagate:release/v1"
-          label_pattern: '^propagate:(.+)$'
-          # On définit comment extraire le nom de la branche cible du label
-          target_branches_extract_pattern: '^propagate:(.+)$'
-          pull_description: |
-            Automatic propagation of bugfix from #${{ github.event.pull_request.number }}
-            Source branch: ${{ github.event.pull_request.head.ref }}
+      - name: Traiter et Propager via GitHub CLI & Git
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          echo "=== Analyse des labels de propagation pour la PR #${PR_NUMBER} ==="
+          
+          # Configuration de l'identité Git pour les opérations locales
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Récupération de la liste des labels associés à la PR au format JSON via gh CLI
+          LABELS=$(gh pr view $PR_NUMBER --json labels --jq '.labels[].name')
+          
+          # Compteur pour identifier si au moins une propagation a été tentée
+          PROPAGATION_COUNT=0
+
+          # Parcours ligne par ligne de la liste des labels trouvés
+          while read -r label; do
+            # Si le label est vide, on passe au suivant
+            if [ -z "$label" ]; then continue; fi
+            
+            # Vérification si le label correspond au schéma strict demandé 'propagate:release/x'
+            if [[ "$label" =~ ^propagate:release/.* ]]; then
+              # Extraction du nom de la branche cible (ce qui se trouve après 'propagate:')
+              TARGET_BRANCH=${label#propagate:}
+              echo "[+] Label détecté : '$label' -> Branche cible identifiée : '$TARGET_BRANCH'"
+              
+              PROPAGATION_COUNT=$((PROPAGATION_COUNT + 1))
+              
+              # Création d'un nom de branche de travail unique pour la nouvelle PR de propagation
+              WORK_BRANCH="automation/propagate-bugfix-${PR_NUMBER}-to-${TARGET_BRANCH//\//-}"
+              
+              echo "    -> Création de la branche locale : $WORK_BRANCH basée sur $TARGET_BRANCH"
+              git checkout -b "$WORK_BRANCH" "origin/$TARGET_BRANCH"
+              
+              echo "    -> Application du commit de correctif ($MERGE_COMMIT) via Cherry-Pick"
+              # Applique le correctif précis fusionné sur main sur notre branche de release cible
+              if git cherry-pick "$MERGE_COMMIT"; then
+                echo "    -> Cherry-pick réussi. Envoi de la branche sur le dépôt distant..."
+                git push origin "$WORK_BRANCH" --force
+                
+                echo "    -> Création de la Pull Request de propagation via 'gh pr create'..."
+                gh pr create \
+                  --title "[Propagation] Correctif issu de #${PR_NUMBER} vers ${TARGET_BRANCH}" \
+                  --body "## 🤖 Propagation Automatique de Correctif
+
+                  Cette Pull Request a été générée automatiquement car la PR #${PR_NUMBER} possédait le label \`${label}\`.
+                  
+                  - **Branche d'origine du bug :** \`${SOURCE_BRANCH}\`
+                  - **Branche de release cible :** \`${TARGET_BRANCH}\`
+                  - **Commit appliqué :** ${MERGE_COMMIT}
+                  
+                  Merci de vérifier la compilation et de valider la fusion." \
+                  --base "$TARGET_BRANCH" \
+                  --head "$WORK_BRANCH"
+              else
+                echo "    ❌ Erreur : Conflit détecté lors du cherry-pick sur $TARGET_BRANCH."
+                echo "    La propagation automatique a échoué. Un développeur doit appliquer le correctif manuellement."
+                # On annule le cherry-pick en cours pour laisser le workspace propre pour les prochains labels
+                git cherry-pick --abort
+              fi
+              
+              # Retour sur l'état d'origine avant de traiter le label suivant
+              git checkout main
+            fi
+          done <<< "$LABELS"
+
+          if [ "$PROPAGATION_COUNT" -eq 0 ]; then
+            echo "[+] Aucun label de type 'propagate:release/*' n'a été trouvé sur cette PR. Rien à propager. ✅"
+          fi

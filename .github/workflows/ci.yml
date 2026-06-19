@@ -6,7 +6,7 @@ on:
   push:
     branches: [ main ]
 
-# --- Gestion des interruptions de flux (TP3 - Partie 3.5) ---
+# --- Gestion des interruptions de flux (TP3 - Partie 3.5 & TP4) ---
 # Annule automatiquement les builds obsolètes si un nouveau commit est poussé
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Ruff
-        run: pip install ruff
+      - name: Install Ruff (Linter Python)
+        run: pip install ruff --break-system-packages
       - name: Python Linting
         run: ruff check .
       - name: Rust Format Check
@@ -71,8 +71,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin --locked
+      # OPTIMISATION (TP4) : Téléchargement du binaire pré-compilé pour éviter 10 minutes de compilation
+      - name: Install Precompiled cargo-tarpaulin
+        run: |
+          wget https://github.com/xdg-acme/cargo-tarpaulin/releases/download/0.27.3/cargo-tarpaulin-0.27.3-musl.tar.gz
+          tar -xvf cargo-tarpaulin-0.27.3-musl.tar.gz
+          sudo mv cargo-tarpaulin /usr/local/bin/
+          cargo tarpaulin --version
 
       - name: Evaluate Code Coverage & Labeling
         env:
@@ -82,12 +87,17 @@ jobs:
           cargo tarpaulin --out stdout > coverage_report.txt
           cat coverage_report.txt
           
-          # Extraction du premier pourcentage trouvé dans la sortie textuelle
-          COVERAGE=$(grep -oE '[0-9.]+%' coverage_report.txt | head -n 1 | tr -d '%')
-          echo "Pourcentage total de code coverage mesuré : $COVERAGE%"
+          # Extraction du pourcentage (gestion robuste de la chaîne textuelle)
+          COVERAGE_RAW=$(grep -oE '[0-9.]+%' coverage_report.txt | head -n 1 | tr -d '%')
+          echo "Pourcentage brut de code coverage : $COVERAGE_RAW%"
           
-          # Vérification de la limite de 50% avec 'bc' pour gérer les flottants
-          if [ $(echo "$COVERAGE < 50.0" | bc -l) -eq 1 ]; then
+          # Extraction de la partie entière pour éviter l'utilisation de 'bc' qui est absent par défaut
+          COVERAGE_INT=${COVERAGE_RAW%.*}
+          if [ -z "$COVERAGE_INT" ]; then COVERAGE_INT=0; fi
+          echo "Valeur entière retenue pour le test : $COVERAGE_INT%"
+          
+          # Vérification de la limite de 50%
+          if [ "$COVERAGE_INT" -lt 50 ]; then
             echo "[-] Couverture insuffisante (< 50%). Ajout du label sur la PR..."
             gh pr edit ${{ github.event.pull_request.number }} --add-label "not enough tests"
           else

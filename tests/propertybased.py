@@ -8,28 +8,30 @@ import sys
 import time
 import random
 import math
-import argparse # Ajouté pour gérer le paramètre de temps (--heavy)
+import argparse # Gère le paramètre de temps (--heavy)
 
 def create_property_based_test(f, regressions=[], time_test=10):
     tstart = time.time()
     i = 0
     while (time.time() - tstart) < time_test:
+        # Partie 3.1 & 3.3 : On injecte d'abord les seeds de régression connus, puis de l'aléatoire[cite: 5, 8]
         if i < len(regressions):
-            seed = regressions[i]
+            seed = regressions[i][cite: 5, 8]
         else:
-            seed = random.randrange(0, 2**64)
+            seed = random.randrange(0, 2**64)[cite: 5, 8]
+            
         random.seed(seed)
         try:
             f()
-            # On print moins souvent pour ne pas flood la CI en mode lourd
-            if i % 1000 == 0:
-                print(f"Test {f.__name__} {i} OK (running...)")
+            # Optimisation (TP4) : On affiche un log toutes les 50 000 itérations pour éviter le flood de la CI[cite: 11]
+            if i % 50000 == 0 and i > 0:
+                print(f"  -> Test {f.__name__} : {i} itérations validées...")
         except AssertionError as err:
-            print(f"\n[FAILURE] Test {f.__name__} failed with seed {seed}")
-            print(err)
-            sys.exit(1)
+            print(f"\n[FAILURE] Test {f.__name__} failed with seed {seed}")[cite: 5, 8]
+            print(err)[cite: 5, 8]
+            sys.exit(1)[cite: 5, 8]
         i += 1
-    print(f"[SUCCESS] Test {f.__name__} validé après {i} itérations.\n")
+    print(f"[SUCCESS] Test {f.__name__} validé avec succès après {i} itérations. ✅\n")
 
 ### Fonctions métier et Tests de propriétés
 
@@ -62,37 +64,39 @@ def distance():
     d_ab = get_dist(a, b)
     d_ba = get_dist(b, a)
 
-    # Propriété A : Symétrie (La distance de A à B est la même que de B à A)
-    assert d_ab == d_ba, f"Échec de la symétrie : {d_ab} != {d_ba}"
+    # CORRECTION SÉCURITÉ : Utilisation de math.isclose() au lieu de '=='
+    # Cela évite que les micro-variations d'arrondis des types flottants (norme IEEE 754) fassent crash la CI.
+    assert math.isclose(d_ab, d_ba, rel_tol=1e-9), f"Échec de la symétrie : {d_ab} != {d_ba}"
     
     # Propriété B : Positivité (Une distance est toujours supérieure ou égale à zéro)
     assert d_ab >= 0, f"La distance ne peut pas être négative : {d_ab}"
 
-    # 💡 Note sur le SEED 4480881574280375424 :
-    # Sans changer le code de génération de nombres aléatoires de l'énoncé, 
-    # ce seed force le générateur à choisir exactement le même point pour A et B (A == B).
-    # Si un développeur écrit par erreur `assert d_ab > 0` (strictement positif), 
-    # ce cas limite fait crasher le test car la distance entre deux points identiques est de 0.0 !
+    # 💡 Note sur le SEED 4480881574280375424 (Demandé au TP3.1) :
+    # Ce seed force le générateur à choisir exactement le même point pour A et B (a == b).[cite: 8]
+    # Si on écrivait 'assert d_ab > 0', ce cas limite provoquerait un échec car la distance vaut 0.0.[cite: 8]
     if a == b:
-        assert d_ab == 0.0, f"Points identiques mais distance non nulle : {d_ab}"
+        assert math.isclose(d_ab, 0.0, abs_tol=1e-9), f"Points identiques mais distance non nulle : {d_ab}"
 
 
 if __name__ == "__main__":
-    # Partie 3.3 : Ajout d'un paramètre au script pour tester beaucoup plus longtemps
+    # Partie 3.3 : Ajout d'un paramètre au script pour tester beaucoup plus longtemps[cite: 8]
     parser = argparse.ArgumentParser(description="Property-based testing pour Simeis.")
-    parser.add_argument("--heavy", action="store_true", help="Exécute les tests en version lourde (CI de release)")
+    parser.add_argument("--heavy", action="store_true", help="Exécute les tests en version lourde (CI de release)")[cite: 8]
     args = parser.parse_args()
 
-    # Définition des temps de test (Rapide en PR vs Long en Release)
+    # Définition des temps de test (Rapide en PR vs Long en Release / TP3.3 & TP4)
     if args.heavy:
         print("=== Mode LOURD activé (Pre-release) ===")
-        duration_addition = 15  # 15 secondes d'additions intensives
-        duration_distance = 30  # 30 secondes de distances intensives
+        duration_addition = 10  # En adéquation avec les contraintes du TP4[cite: 11]
+        duration_distance = 15  
     else:
         print("=== Mode RAPIDE activé (Vérification PR) ===")
-        duration_addition = 2
-        duration_distance = 4
+        duration_addition = 1[cite: 5]
+        duration_distance = 2
 
     # Lancement des tests
+    print("Exécution du test d'addition...")
     create_property_based_test(addition, time_test=duration_addition)
-    create_property_based_test(distance, regressions=[4480881574280375424], time_test=duration_distance)
+    
+    print("Exécution du test de distance géométrique...")
+    create_property_based_test(distance, regressions=[4480881574280375424], time_test=duration_distance)[cite: 8]

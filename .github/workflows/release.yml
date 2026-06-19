@@ -1,0 +1,65 @@
+name: Release - Automatisation & Changelog
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - 'release/*'
+
+jobs:
+  create_release:
+    name: Generation de la Release Officielle
+    if: github.event_pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+       #Tarpaulin ou script de release avec gh CLI
+      - name: Generate Changelog and Release via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ github.event_pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event_pull_request.number }}
+        run: |
+          echo "=== Extraction des Pull Requests ==="
+          PR_TITLE=$(gh pr view $PR_NUMBER --json title --jq '.title')
+          
+          echo "## 🚀 Release Notes - $TARGET_BRANCH" > changelog.md
+          echo "" >> changelog.md
+          echo "### 🌟 Features" > features.md
+          echo "### 🐛 Bugfixes" > bugfixes.md
+          echo "### 📦 Autres changements" > others.md
+
+          SOURCE_BRANCH="${{ github.event_pull_request.head.ref }}"
+          
+          if [[ "$SOURCE_BRANCH" == feature/* ]]; then
+            echo "- $PR_TITLE (#$PR_NUMBER) @${{ github.actor }}" >> features.md
+          elif [[ "$SOURCE_BRANCH" == bug/* ]]; then
+            echo "- $PR_TITLE (#$PR_NUMBER) @${{ github.actor }}" >> bugfixes.md
+          else
+            echo "- $PR_TITLE (#$PR_NUMBER) @${{ github.actor }}" >> others.md
+          fi
+
+          cat features.md >> changelog.md
+          echo "" >> changelog.md
+          cat bugfixes.md >> changelog.md
+          echo "" >> changelog.md
+          cat others.md >> changelog.md
+
+          TAG_NAME="${TARGET_BRANCH//release\//}"
+          
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "[+] Mise a jour de la release existante..."
+            gh release edit "$TAG_NAME" --notes-file changelog.md
+          else
+            echo "[+] Creation de la release officielle..."
+            gh release create "$TAG_NAME" \
+              --title "Release $TAG_NAME" \
+              --notes-file changelog.md \
+              --target "$TARGET_BRANCH"
+          fi

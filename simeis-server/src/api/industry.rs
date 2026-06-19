@@ -22,165 +22,165 @@ use crate::api::GameState;
 
 // @summary List all the industry units available to buy on the station
 // @returns The price for each unit
-#[web::get("/buy")]
-async fn list_buy_industry(
+#[web::get"/buy"]
+async fn list_buy_industry
     args: Path<StationId>,
     srv: GameState,
     req: HttpRequest,
-) -> impl web::Responder {
-    let pkey = get_player_key!(req);
+ -> impl web::Responder {
+    let pkey = get_player_key!req;
     let station_id = *args;
 
     let data = srv
-        .map_player(&pkey, |player| {
-            Box::pin(async move {
-                let Some(_station) = player.stations.get(&station_id).cloned() else {
-                    return Err(Errcode::NoSuchStation(station_id));
+        .map_player&pkey, |player| {
+            Box::pinasync move {
+                let Some_station = player.stations.get&station_id.cloned else {
+                    return ErrErrcode::NoSuchStationstation_id;
                 };
-                let mut res: BTreeMap<IndustryUnitType, f64> = BTreeMap::new();
-                for unit in IndustryUnitType::iter() {
-                    let price = unit.get_price_buy();
-                    res.insert(unit, price);
+                let mut res: BTreeMap<IndustryUnitType, f64> = BTreeMap::new;
+                for unit in IndustryUnitType::iter {
+                    let price = unit.get_price_buy;
+                    res.insertunit, price;
                 }
-                Ok(to_value(res).unwrap())
-            })
-        })
+                Okto_valueres.unwrap
+            }
+        }
         .await;
-    build_response(data)
+    build_responsedata
 }
 
 // @summary Buy a new industry unit
 // @returns The ID of the unit bought, and the cost of the transaction
-#[web::post("/buy/{name}")]
-async fn buy_industry(
-    args: Path<(StationId, String)>,
+#[web::post"/buy/{name}"]
+async fn buy_industry
+    args: Path<StationId, String>,
     srv: GameState,
     req: HttpRequest,
-) -> impl web::Responder {
-    let pkey = get_player_key!(req);
-    let (station_id, indutype) = args.clone();
-    let Ok(indutype) = IndustryUnitType::from_str(indutype.as_str()) else {
-        return build_response(Err(Errcode::InvalidArgument("industry_type")));
+ -> impl web::Responder {
+    let pkey = get_player_key!req;
+    let station_id, indutype = args.clone;
+    let Okindutype = IndustryUnitType::from_strindutype.as_str else {
+        return build_responseErrErrcode::InvalidArgument"industry_type";
     };
 
     let data = srv
-        .map_player_mut(&pkey, |player| {
-            Box::pin(async move {
-                let Some(station) = player.stations.get(&station_id).cloned() else {
-                    return Err(Errcode::NoSuchStation(station_id));
+        .map_player_mut&pkey, |player| {
+            Box::pinasync move {
+                let Somestation = player.stations.get&station_id.cloned else {
+                    return ErrErrcode::NoSuchStationstation_id;
                 };
-                let (id, cost) = station.buy_industry(player, indutype).await?;
-                Ok(json!({ "id": id, "cost": cost }))
-            })
-        })
+                let id, cost = station.buy_industryplayer, indutype.await?;
+                Okjson!{ "id": id, "cost": cost }
+            }
+        }
         .await;
-    build_response(data)
+    build_responsedata
 }
 
 // @summary Upgrade an industry unit
 // @returns The new rank of the industry unit
-#[web::post("/upgrade/{industry_id}")]
-async fn upgrade_industry(
-    args: Path<(StationId, IndustryUnitId)>,
+#[web::post"/upgrade/{industry_id}"]
+async fn upgrade_industry
+    args: Path<StationId, IndustryUnitId>,
     srv: GameState,
     req: HttpRequest,
-) -> impl web::Responder {
-    let pkey = get_player_key!(req);
-    let (station_id, id) = *args;
+ -> impl web::Responder {
+    let pkey = get_player_key!req;
+    let station_id, id = *args;
 
     let data = srv
-        .map_player_mut(&pkey, |player| {
-            Box::pin(async move {
-                let Some(station) = player.stations.get(&station_id).cloned() else {
-                    return Err(Errcode::NoSuchStation(station_id));
+        .map_player_mut&pkey, |player| {
+            Box::pinasync move {
+                let Somestation = player.stations.get&station_id.cloned else {
+                    return ErrErrcode::NoSuchStationstation_id;
                 };
-                let newrank = station.upgrade_industry(player, &id).await?;
-                Ok(json!({ "new-rank": newrank }))
-            })
-        })
+                let newrank = station.upgrade_industryplayer, &id.await?;
+                Okjson!{ "new-rank": newrank }
+            }
+        }
         .await;
-    build_response(data)
+    build_responsedata
 }
 
 // @summary Start an industry unit
 // @returns Nothing
 // Unless started, an industry unit will NOT produce anything
-#[web::post("/start/{industry_id}")]
-async fn start_industry(
-    args: Path<(StationId, IndustryUnitId)>,
+#[web::post"/start/{industry_id}"]
+async fn start_industry
+    args: Path<StationId, IndustryUnitId>,
     srv: GameState,
     req: HttpRequest,
-) -> impl web::Responder {
-    let pkey = get_player_key!(req);
-    let (station_id, id) = *args;
+ -> impl web::Responder {
+    let pkey = get_player_key!req;
+    let station_id, id = *args;
 
     let data = srv
-        .map_station(&pkey, &station_id, |pid, station| {
-            Box::pin(async move {
-                station.start_industry(pid, &id).await?;
-                Ok(to_value(()).unwrap())
-            })
-        })
+        .map_station&pkey, &station_id, |pid, station| {
+            Box::pinasync move {
+                station.start_industrypid, &id.await?;
+                Okto_value.unwrap
+            }
+        }
         .await;
-    build_response(data)
+    build_responsedata
 }
 
 // @summary Stop an industry unit
 // @returns Nothing
-#[web::post("/stop/{industry_id}")]
-async fn stop_industry(
-    args: Path<(StationId, IndustryUnitId)>,
+#[web::post"/stop/{industry_id}"]
+async fn stop_industry
+    args: Path<StationId, IndustryUnitId>,
     srv: GameState,
     req: HttpRequest,
-) -> impl web::Responder {
-    let pkey = get_player_key!(req);
-    let (station_id, id) = *args;
+ -> impl web::Responder {
+    let pkey = get_player_key!req;
+    let station_id, id = *args;
 
     let data = srv
-        .map_station(&pkey, &station_id, |pid, station| {
-            Box::pin(async move {
-                station.stop_industry(pid, &id).await?;
-                Ok(to_value(()).unwrap())
-            })
-        })
+        .map_station&pkey, &station_id, |pid, station| {
+            Box::pinasync move {
+                station.stop_industrypid, &id.await?;
+                Okto_value.unwrap
+            }
+        }
         .await;
-    build_response(data)
+    build_responsedata
 }
 
 // @summary Shows the production inputs & outputs of a particular unit
 // @returns The resources needed in input of the unit, and the one produced in the output
-#[web::get("/production/{industry_id}")]
-async fn show_production(
-    args: Path<(StationId, IndustryUnitId)>,
+#[web::get"/production/{industry_id}"]
+async fn show_production
+    args: Path<StationId, IndustryUnitId>,
     srv: GameState,
     req: HttpRequest,
-) -> impl web::Responder {
-    let pkey = get_player_key!(req);
-    let (station_id, id) = *args;
+ -> impl web::Responder {
+    let pkey = get_player_key!req;
+    let station_id, id = *args;
 
     let data = srv
-        .map_station(&pkey, &station_id, |pid, station| {
-            Box::pin(async move {
-                let (inputs, outputs) = station.get_industry_production(pid, id).await?;
-                Ok(json!({
-                    "inputs": to_value(inputs).unwrap(),
-                    "outputs": to_value(outputs).unwrap(),
-                }))
-            })
-        })
+        .map_station&pkey, &station_id, |pid, station| {
+            Box::pinasync move {
+                let inputs, outputs = station.get_industry_productionpid, id.await?;
+                Okjson!{
+                    "inputs": to_valueinputs.unwrap,
+                    "outputs": to_valueoutputs.unwrap,
+                }
+            }
+        }
         .await;
 
-    build_response(data)
+    build_responsedata
 }
 
-pub fn configure<T: IntoPattern>(base: T, srv: &mut ServiceConfig) {
-    srv.service(
-        scope(base)
-            .service(list_buy_industry)
-            .service(buy_industry)
-            .service(upgrade_industry)
-            .service(show_production)
-            .service(start_industry)
-            .service(stop_industry),
-    );
+pub fn configure<T: IntoPattern>base: T, srv: &mut ServiceConfig {
+    srv.service
+        scopebase
+            .servicelist_buy_industry
+            .servicebuy_industry
+            .serviceupgrade_industry
+            .serviceshow_production
+            .servicestart_industry
+            .servicestop_industry,
+    ;
 }

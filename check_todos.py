@@ -2,7 +2,7 @@
 """
 Script to check that all TODOs in the codebase have associated GitHub issues.
 Format:
-  // TODO (#123) Description - issue 123 must exist and be open
+  // TODO  Description - issue 123 must exist and be open
   // TODO Description - ERROR: no issue associated
 """
 

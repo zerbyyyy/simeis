@@ -16,28 +16,28 @@ use crate::api::GameState;
 // @summary Creates a new player in the game
 // @returns The ID of the player, and its authentication secret key
 // The secret key must be used in the "Simeis-Key" HTTP header
-#[web::post("/new/{name}")]
-async fn new_player(srv: GameState, name: Path<String>) -> impl web::Responder {
-    let name = name.to_string();
-    let res = srv.new_player(name).await.map(|(id, key)| {
-        json!({
+#[web::post"/new/{name}"]
+async fn new_playersrv: GameState, name: Path<String> -> impl web::Responder {
+    let name = name.to_string;
+    let res = srv.new_playername.await.map|id, key| {
+        json!{
             "playerId": id,
             "key": key,
-        })
-    });
-    build_response(res)
+        }
+    };
+    build_responseres
 }
 
 // @summary Get the status from the player of a given id.
 // @returns Information about the player, complete if it's you, minimal if it's another player
-#[web::get("/{player_id}")]
-async fn get_player(srv: GameState, id: Path<PlayerId>, req: HttpRequest) -> impl web::Responder {
-    let pkey = get_player_key!(req);
-    let id = id.as_ref();
-    let data = srv.player_to_json(&pkey, id).await;
-    build_response(data)
+#[web::get"/{player_id}"]
+async fn get_playersrv: GameState, id: Path<PlayerId>, req: HttpRequest -> impl web::Responder {
+    let pkey = get_player_key!req;
+    let id = id.as_ref;
+    let data = srv.player_to_json&pkey, id.await;
+    build_responsedata
 }
 
-pub fn configure<T: IntoPattern>(base: T, srv: &mut ServiceConfig) {
-    srv.service(scope(base).service(get_player).service(new_player));
+pub fn configure<T: IntoPattern>base: T, srv: &mut ServiceConfig {
+    srv.servicescopebase.serviceget_player.servicenew_player;
 }

@@ -16,9 +16,9 @@ def create_property_based_test(f, regressions=[], time_test=10):
     while (time.time() - tstart) < time_test:
         # Partie 3.1 & 3.3 : On injecte d'abord les seeds de régression connus, puis de l'aléatoire[cite: 5, 8]
         if i < len(regressions):
-            seed = regressions[i][cite: 5, 8]
+            seed = regressions[i]
         else:
-            seed = random.randrange(0, 2**64)[cite: 5, 8]
+            seed = random.randrange(0, 2**64)
             
         random.seed(seed)
         try:
@@ -27,9 +27,9 @@ def create_property_based_test(f, regressions=[], time_test=10):
             if i % 50000 == 0 and i > 0:
                 print(f"  -> Test {f.__name__} : {i} itérations validées...")
         except AssertionError as err:
-            print(f"\n[FAILURE] Test {f.__name__} failed with seed {seed}")[cite: 5, 8]
-            print(err)[cite: 5, 8]
-            sys.exit(1)[cite: 5, 8]
+            print(f"\n[FAILURE] Test {f.__name__} failed with seed {seed}")
+            print(err)
+            sys.exit(1)
         i += 1
     print(f"[SUCCESS] Test {f.__name__} validé avec succès après {i} itérations. ✅\n")
 
@@ -81,7 +81,7 @@ def distance():
 if __name__ == "__main__":
     # Partie 3.3 : Ajout d'un paramètre au script pour tester beaucoup plus longtemps[cite: 8]
     parser = argparse.ArgumentParser(description="Property-based testing pour Simeis.")
-    parser.add_argument("--heavy", action="store_true", help="Exécute les tests en version lourde (CI de release)")[cite: 8]
+    parser.add_argument("--heavy", action="store_true", help="Exécute les tests en version lourde (CI de release)")
     args = parser.parse_args()
 
     # Définition des temps de test (Rapide en PR vs Long en Release / TP3.3 & TP4)
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         duration_distance = 15  
     else:
         print("=== Mode RAPIDE activé (Vérification PR) ===")
-        duration_addition = 1[cite: 5]
+        duration_addition = 1
         duration_distance = 2
 
     # Lancement des tests
@@ -99,4 +99,4 @@ if __name__ == "__main__":
     create_property_based_test(addition, time_test=duration_addition)
     
     print("Exécution du test de distance géométrique...")
-    create_property_based_test(distance, regressions=[4480881574280375424], time_test=duration_distance)[cite: 8]
+    create_property_based_test(distance, regressions=[4480881574280375424], time_test=duration_distance)

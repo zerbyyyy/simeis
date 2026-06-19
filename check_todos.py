@@ -9,7 +9,8 @@ Format:
 import os
 import re
 import sys
-import requests
+import subprocess
+import json
 
 # Regex to find TODOs with optional issue numbers
 TODO_PATTERN = re.compile(r'TODO\s*(?:\(#(\d+)\))?')
@@ -32,47 +33,31 @@ EXCLUDE_FILES = {
     'check_todos.py',  # Don't check the checker itself
 }
 
-def get_github_token():
-    """Get GitHub token from environment."""
-    token = os.getenv('GITHUB_TOKEN')
-    if not token:
-        print("Error: GITHUB_TOKEN environment variable not set")
-        sys.exit(1)
-    return token
-
-def get_repo_info():
-    """Get repository owner and name from environment."""
-    repo = os.getenv('GITHUB_REPOSITORY', '').split('/')
-    if len(repo) != 2:
-        print("Error: GITHUB_REPOSITORY not set properly")
-        sys.exit(1)
-    return repo[0], repo[1]
-
-def check_issue_exists(owner, repo, issue_num, token):
-    """Check if an issue exists and is open."""
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_num}"
-    headers = {
-        'Authorization': f'token {token}',
-        'Accept': 'application/vnd.github.v3+json'
-    }
-    
+def check_issue_exists_and_open(issue_num):
+    """
+    Check if an issue exists and is open using the native 'gh' CLI tool.
+    Returns: (exists, is_open)
+    """
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        # Appel à la CLI GitHub native via subprocess (évite les librairies tierces comme requests)
+        result = subprocess.run(
+            ['gh', 'issue', 'view', str(issue_num), '--json', 'state'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         
-        if response.status_code == 404:
+        # Si la CLI gh retourne un code d'erreur (ex: 404), l'issue n'existe pas
+        if result.returncode != 0:
             return False, None
+            
+        data = json.loads(result.stdout)
+        is_open = data.get('state') == 'OPEN'  # Note : la CLI gh retourne souvent 'OPEN' ou 'CLOSED' en majuscules
+        return True, is_open
         
-        if response.status_code == 200:
-            issue = response.json()
-            is_open = issue.get('state') == 'open'
-            return True, is_open
-        
-        print(f"Warning: API returned status {response.status_code} for issue #{issue_num}")
-        return True, None  # Assume it exists if we can't determine
-        
-    except requests.RequestException as e:
-        print(f"Warning: Failed to check issue #{issue_num}: {e}")
-        return True, None  # Assume it exists if we can't connect
+    except Exception as e:
+        print(f"Warning: Failed to check issue #{issue_num} via gh CLI: {e}")
+        return True, None  # Assume it exists if the command fails unexpectedly
 
 def find_todos(root_dir):
     """Find all TODOs in the codebase."""
@@ -109,11 +94,14 @@ def find_todos(root_dir):
 
 def main():
     """Main function."""
-    token = get_github_token()
-    owner, repo = get_repo_info()
+    # Vérification de la présence du jeton d'authentification requis par la CLI 'gh'
+    if not os.getenv('GH_TOKEN'):
+        print("Error: GH_TOKEN environment variable not set")
+        sys.exit(1)
+        
     root_dir = os.getcwd()
     
-    print(f"Checking TODOs in {repo}...")
+    print("Checking TODOs in repository using GitHub CLI...")
     todos = find_todos(root_dir)
     
     if not todos:
@@ -133,7 +121,7 @@ def main():
             )
         else:
             issue_num = todo['issue']
-            exists, is_open = check_issue_exists(owner, repo, issue_num, token)
+            exists, is_open = check_issue_exists_and_open(issue_num)
             
             if not exists:
                 errors.append(
@@ -148,7 +136,7 @@ def main():
                     f"   {todo['text']}"
                 )
             else:
-                print(f"✓ {todo['file']}:{todo['line']} → Issue #{issue_num}")
+                print(f"✓ {todo['file']}:{todo['line']} → Issue #{issue_num} (Open)")
     
     if errors:
         print("\n" + "="*60)
@@ -159,6 +147,7 @@ def main():
             print()
         return 1
     
+    print("\n✓ All TODOs are linked to valid open issues !")
     return 0
 
 if __name__ == '__main__':

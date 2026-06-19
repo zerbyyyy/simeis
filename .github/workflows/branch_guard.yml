@@ -6,22 +6,43 @@ on:
 
 jobs:
   enforce-branching:
+    name: Contrôle des branches cibles et sources
     runs-on: ubuntu-latest
     # On ne lance ce job que si la cible est release/x
     if: startsWith(github.base_ref, 'release/')
+    
     steps:
-      - name: Check Source Branch
-        id: check
-        run: |
-          SOURCE=${{ github.head_ref }}
-          if [[ "$SOURCE" == "main" ]] || [[ "$SOURCE" == bug/* ]]; then
-            echo "valid=true" >> $GITHUB_OUTPUT
-          else
-            echo "valid=false" >> $GITHUB_OUTPUT
-          fi
+      # Seule action du marketplace officiellement autorisée dans le sujet
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Close PR if invalid
-        if: steps.check.outputs.valid == 'false'
-        uses: superbrothers/close-pull-request@v3
-        with:
-          comment: "❌ PR fermée automatiquement. Les branches 'release/*' ne peuvent accepter que des merges venant de 'main' ou 'bug/*'."
+      - name: Enforce Flow and Close PR via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Branche source : $SOURCE_BRANCH"
+          echo "Branche cible  : $TARGET_BRANCH"
+
+          # Vérification de la règle Git Flow du TP2
+          if [[ "$SOURCE_BRANCH" == "main" || "$SOURCE_BRANCH" == bug/* ]]; then
+            echo "✅ Branche source valide. Alignement conforme."
+            exit 0
+          else
+            echo "❌ Flux invalide détecté. Fermeture de la PR..."
+            
+            # 1. Publication d'un commentaire natif explicatif sur la PR via 'gh'
+            gh pr comment $PR_NUMBER --body "❌ **Fermeture automatique de la CI** ❌
+
+            Les fusions vers la branche de stabilisation \`$TARGET_BRANCH\` ne peuvent provenir **que** de \`main\` ou de branches de correctifs \`bug/*\`.
+            
+            La branche source actuelle (\`$SOURCE_BRANCH\`) n'est pas autorisée ici. Merci de revoir votre flux Git."
+
+            # 2. Fermeture de la PR via la commande native 'gh'
+            gh pr close $PR_NUMBER
+            
+            # 3. Échec du step pour bloquer visuellement le statut de la CI
+            exit 1
+          fi

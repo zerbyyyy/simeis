@@ -1,77 +1,151 @@
 #!/usr/bin/env python3
 """
 tests/functional_tests.py
-Squelette des tests fonctionnels automatiques.
-
-Exécution :
-    python tests/functional_tests.py
-
-Le script doit retourner le code de sortie 0 pour que le workflow CI
-considère les tests comme réussis (vérification implicite par GitHub Actions).
-
-Conventions :
-- Chaque cas de test est une fonction préfixée par `test_`.
-- run_all_tests() appelle toutes les fonctions de test et agrège les résultats.
-- En cas d'échec, le script se termine avec sys.exit(1).
+Tests fonctionnels automatiques (Scénarios utilisateurs API) pour Simeis.
 """
 
 import subprocess
 import sys
+import time
+import urllib.request
+import urllib.error
+import json
 from pathlib import Path
 
-# ─── Chemin vers le binaire compilé en debug ────────────────────────────────
-# Adapter le nom du binaire selon le champ `name` de [package] dans Cargo.toml
-BINARY = Path("target/debug/my_project")
+# URL locale du serveur API Simeis
+API_URL = "http://127.0.0.1:8080"
+# Utilisation du binaire de debug pour les tests fonctionnels standard
+BINARY = Path("target/debug/simeis-server")
+
+# ─── Helper pour les requêtes HTTP (Sans bibliothèque tierce comme requests) ───
+
+def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple[int, str]:
+    """Envoie une requête HTTP à l'API Simeis en utilisant uniquement urllib."""
+    url = f"{API_URL}{endpoint}"
+    req_data = json.dumps(data).encode("utf-8") if data else None
+    headers = {"Content-Type": "application/json"} if data else {}
+    
+    req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return response.status, response.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8")
+    except urllib.error.URLError as e:
+        print(f"❌ Erreur de connexion à l'API : {e.reason}")
+        return 500, str(e.reason)
+
+# ─── Validation des Scénarios Utilisateurs (TP3 - Partie 1) ─────────────────
+
+def test_scenario_1_economy() -> None:
+    """Scénario 1 : Création joueur -> Achat vaisseau -> Achat module."""
+    print("👉 Exécution du Scénario 1 : Économie de base")
+    
+    # 1. Création du joueur Evan
+    code, body = send_request("/player/create", "POST", {"name": "Evan"})
+    assert code in [200, 201], f"Échec création joueur: {body}"
+    print("  ✓ Joueur 'Evan' créé avec succès.")
+    
+    # 2. Achat d'un vaisseau de type Explorer
+    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "Explorer"})
+    assert code == 200, f"Échec achat vaisseau: {body}"
+    print("  ✓ Vaisseau 'Explorer' acheté.")
+    
+    # 3. Achat d'un module de minage "Miner"
+    code, body = send_request("/player/buy-module", "POST", {"module_type": "Miner"})
+    assert code == 200, f"Échec achat module: {body}"
+    print("  ✓ Module 'Miner' acheté et équipé.")
 
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+def test_scenario_2_mechanics() -> None:
+    """Scénario 2 : Déplacement spatial du vaisseau."""
+    print("👉 Exécution du Scénario 2 : Mécanique de déplacement")
+    
+    # Simulation d'un déplacement vers un secteur précis
+    code, body = send_request("/ship/travel", "POST", {"destination": "Simeis-Alpha"})
+    assert code == 200, f"Échec du voyage spatial: {body}"
+    
+    # Vérification du statut ou des coordonnées du joueur après voyage
+    code, body = send_request("/player/status", "GET")
+    assert code == 200 and "Simeis-Alpha" in body, "Le vaisseau n'a pas atteint la destination attendue."
+    print("  ✓ Voyage vers 'Simeis-Alpha' validé.")
 
-def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    """Lance une commande et retourne le résultat."""
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
+def test_scenario_3_errors() -> None:
+    """Scénario 3 : Gestion des limites économiques et refus de transaction."""
+    print("👉 Exécution du Scénario 3 : Limites financières")
+    
+    # Tentative d'achat d'un vaisseau hors de prix pour forcer un code de refus (ex: 400 Bad Request)
+    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "DeathStar"})
+    
+    # L'API doit retourner une erreur propre (400 ou message explicite) sans crash du serveur
+    assert code == 400 or "insuffisants" in body.lower(), \
+        f"La transaction aurait dû échouer pour fonds insuffisants. Réponse API: {body}"
+    print("  ✓ Refus sur fonds insuffisants correctement intercepté par l'API.")
 
-def assert_exit_code(result: subprocess.CompletedProcess, expected: int = 0) -> None:
-    """Lève une AssertionError si le code de retour ne correspond pas."""
-    assert result.returncode == expected, (
-        f"Code de sortie attendu : {expected}, obtenu : {result.returncode}\n"
-        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+# ─── Cycle de vie du serveur en cours de test ──────────────────────────────
+
+def main():
+    if not BINARY.exists():
+        print(f"❌ Erreur : Le binaire {BINARY} n'existe pas. Lancez 'make build' d'abord.")
+        sys.exit(1)
+
+    print("=== Démarrage du serveur Simeis pour les tests fonctionnels ===")
+    # Lancement du serveur en arrière-plan
+    server_process = subprocess.Popen(
+        [str(BINARY)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
     )
-
-
-# ─── Tests fonctionnels ─────────────────────────────────────────────────────
-
-def test_binary_exists() -> None:
-    """Vérifie que le binaire debug a bien été compilé."""
-    assert BINARY.exists(), f"Binaire introuvable : {BINARY}"
-
-
-def test_placeholder() -> None:
-    """Test fonctionnel à compléter — retourne toujours succès pour l'instant."""
-    # TODO (#19) remplacer par un vrai scénario fonctionnel
-    pass
-
-
-# ─── Runner ─────────────────────────────────────────────────────────────────
-
-def run_all_tests() -> int:
-    """Exécute tous les tests et retourne le nombre d'échecs."""
-    tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]
-    failures = 0
-
-    for test in tests:
+    
+    # Attente active que le serveur API soit prêt à répondre (TP4 Optimisation)
+    ready = False
+    for _ in range(10):
+        time.sleep(0.5)
         try:
-            test()
-            print(f"  ✓  {test.__name__}")
+            # Petite requête de "ping" sur le serveur pour voir s'il répond
+            urllib.request.urlopen(f"{API_URL}/player/status", timeout=0.5)
+            ready = True
+            break
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            # Si c'est une erreur HTTP (ex: 401/404), le serveur écoute ! C'est bon.
+            if isinstance(sys.exc_info()[1], urllib.error.HTTPError):
+                ready = True
+                break
+            continue
+
+    if not ready:
+        print("❌ Erreur : Le serveur Simeis n'a pas démarré à temps sur le port 8080.")
+        server_process.terminate()
+        sys.exit(1)
+
+    print("🚀 Serveur en ligne. Lancement des scénarios utilisateurs...\n")
+    
+    failures = 0
+    scenarios = [test_scenario_1_economy, test_scenario_2_mechanics, test_scenario_3_errors]
+    
+    for scenario in scenarios:
+        try:
+            scenario()
+            print(f"✅ {scenario.__name__} réussi.\n")
+        except AssertionError as exc:
+            print(f"💥 ÉCHEC dans {scenario.__name__} : {exc}\n")
+            failures += 1
         except Exception as exc:
-            print(f"  ✗  {test.__name__} : {exc}")
+            print(f"❌ Erreur inattendue dans {scenario.__name__} : {exc}\n")
             failures += 1
 
-    return failures
+    # Arrêt propre du serveur à la fin des tests
+    print("=== Fermeture du serveur Simeis ===")
+    server_process.terminate()
+    server_process.wait()
 
+    if failures > 0:
+        print(f"❌ Fin des tests : {failures} scénario(s) en échec.")
+        sys.exit(1)
+    else:
+        print("🎉 Tous les scénarios fonctionnels s'exécutent avec succès ! ✅")
+        sys.exit(0)
 
 if __name__ == "__main__":
-    print("=== Tests fonctionnels ===")
-    nb_failures = run_all_tests()
-    print(f"\n{'OK' if nb_failures == 0 else 'ÉCHEC'} — {nb_failures} échec(s)")
-    sys.exit(0 if nb_failures == 0 else 1)
+    main()

@@ -6,6 +6,22 @@ on:
   push:
     branches: [ main ]
 
+# --- Optimisations globales (TP4) ---
+# Force Rust à optimiser les builds incrémentaux et active la couleur dans les terminaux de la CI
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+# Annule automatiquement les builds obsolètes si un nouveau commit est poussé (TP3.5 & TP4)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Permissions requises pour permettre à l'outil 'gh' d'ajouter un label sur la PR
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   # --- 1. JOB LINT (Python & Rust Format) ---
   lint:
@@ -13,21 +29,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Ruff
-        run: pip install ruff
+      - name: Install Ruff (Linter Python)
+        run: pip install ruff --break-system-packages
       - name: Python Linting
         run: ruff check .
       - name: Rust Format Check
         run: cargo fmt --check
 
-  # --- 2. JOB TEST (Unit Tests) ---
+ # --- 2. JOB TEST (Unit Tests & Property-Based) ---
   test:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Install and Setup Precompiled sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv sccache-v0.8.2-x86_64-unknown-linux-musl/sccache /usr/local/bin/
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+
       - name: Rust - Tests unitaires
+        env:
+          CARGO_INCREMENTAL: "0" # Sécurité supplémentaire locale
         run: make test
+
+      - name: Python - Property-Based Testing (Quick)
+        run: python3 tests/propertybased.py
+
+      - name: Show Cache Stats
+        run: sccache --show-stats
 
   # --- 3. JOB BUILD DEV (Compilation simple) ---
   build_dev:
@@ -35,8 +68,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install and Setup Precompiled sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+          sudo mv sccache-v0.8.2-x86_64-unknown-linux-musl/sccache /usr/local/bin/
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_DIR=$HOME/.cache/sccache" >> $GITHUB_ENV
+
       - name: Développement - Check & Build
         run: make build
+
+      - name: Show Cache Stats
+        run: sccache --show-stats
 
   # --- 4. JOB QUALITY (Clippy & Advanced Checks) ---
   quality:
@@ -47,7 +92,48 @@ jobs:
       - name: Rust - Clippy
         run: cargo clippy -- -D warnings
 
-  # --- 5. JOB PRODUCTION (Merge dans main uniquement) ---
+  # --- 5. JOB COVERAGE (TP3 - Partie 2) ---
+  coverage:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # OPTIMISATION SÉCURISÉE (TP4) : Téléchargement du binaire pré-compilé officiel (Zéro erreur 404)
+      - name: Install Precompiled cargo-tarpaulin
+        run: |
+          echo "=== Téléchargement direct de cargo-tarpaulin ==="
+          wget https://github.com/xd009642/tarpaulin/releases/download/0.27.3/cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz
+          sudo mv cargo-tarpaulin /usr/local/bin/
+          cargo tarpaulin --version
+
+      - name: Evaluate Code Coverage & Labeling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Exécution de tarpaulin et capture du résultat brut
+          cargo tarpaulin --out stdout > coverage_report.txt
+          cat coverage_report.txt
+          
+          # Extraction du pourcentage (gestion robuste de la chaîne textuelle)
+          COVERAGE_RAW=$(grep -oE '[0-9.]+%' coverage_report.txt | head -n 1 | tr -d '%')
+          echo "Pourcentage brut de code coverage : $COVERAGE_RAW%"
+          
+          # Extraction de la partie entière pour éviter l'utilisation de 'bc' qui est absent par défaut
+          COVERAGE_INT=${COVERAGE_RAW%.*}
+          if [ -z "$COVERAGE_INT" ]; then COVERAGE_INT=0; fi
+          echo "Valeur entière retenue pour le test : $COVERAGE_INT%"
+          
+          # Vérification de la limite de 50%
+          if [ "$COVERAGE_INT" -lt 50 ]; then
+            echo "[-] Couverture insuffisante (< 50%). Ajout du label sur la PR..."
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "not enough tests"
+          else
+            echo "[+] Couverture suffisante (>= 50%). Pas de modification de label nécessaire."
+          fi
+
+  # --- 6. JOB PRODUCTION (Merge dans main uniquement) ---
   release_and_doc:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest

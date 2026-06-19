@@ -9,7 +9,7 @@ on:
 jobs:
   create_release:
     name: Generation de la Release Officielle
-    if: github.event_pull_request.merged == true
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -19,31 +19,61 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-       #Tarpaulin ou script de release avec gh CLI
+      # --- ÉTAPE COMPILATION DES ARTEFACTS ---
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust Server in Release Mode
+        run: |
+          echo "=== Compilation du serveur en mode Release ==="
+          cargo build --release --manifest-path simeis-server/Cargo.toml
+
+      - name: Prepare Artifacts Archive
+        run: |
+          echo "=== Preparation du package d'artefacts ==="
+          mkdir -p dist/
+          # On copie le binaire compilé
+          cp target/release/simeis-server dist/
+          # On copie le SDK Python ou les scripts requis
+          cp sdk/python.py dist/
+          # On crée une archive zip propre contenant tout
+          zip -r simeis-artifacts.zip dist/
+
+      # --- ÉTAPE GENERATION DU CHANGELOG & RELEASE ---
       - name: Generate Changelog and Release via GitHub CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TARGET_BRANCH: ${{ github.event_pull_request.base.ref }}
-          PR_NUMBER: ${{ github.event_pull_request.number }}
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
-          echo "=== Extraction des Pull Requests ==="
-          PR_TITLE=$(gh pr view $PR_NUMBER --json title --jq '.title')
+          echo "=== Recuperation de toutes les PRs de la release ==="
+          TAG_NAME="${TARGET_BRANCH//release\//}"
           
-          echo "## 🚀 Release Notes - $TARGET_BRANCH" > changelog.md
+          echo "## 🚀 Release Notes - $TAG_NAME" > changelog.md
           echo "" >> changelog.md
+          
           echo "### 🌟 Features" > features.md
           echo "### 🐛 Bugfixes" > bugfixes.md
           echo "### 📦 Autres changements" > others.md
 
-          SOURCE_BRANCH="${{ github.event_pull_request.head.ref }}"
-          
-          if [[ "$SOURCE_BRANCH" == feature/* ]]; then
-            echo "- $PR_TITLE (#$PR_NUMBER) @${{ github.actor }}" >> features.md
-          elif [[ "$SOURCE_BRANCH" == bug/* ]]; then
-            echo "- $PR_TITLE (#$PR_NUMBER) @${{ github.actor }}" >> bugfixes.md
-          else
-            echo "- $PR_TITLE (#$PR_NUMBER) @${{ github.actor }}" >> others.md
-          fi
+          gh pr list --base "$TARGET_BRANCH" --state merged --json title,number,url,headRefName,author --limit 100 > all_prs.json
+
+          jq -c '.[]' all_prs.json | while read -r pr; do
+            TITLE=$(echo "$pr" | jq -r '.title')
+            NUMBER=$(echo "$pr" | jq -r '.number')
+            URL=$(echo "$pr" | jq -r '.url')
+            SOURCE_BRANCH=$(echo "$pr" | jq -r '.headRefName')
+            AUTHOR=$(echo "$pr" | jq -r '.author.login')
+
+            LINE="- $TITLE ([#$NUMBER]($URL)) @$AUTHOR"
+
+            if [[ "$SOURCE_BRANCH" == feature/* ]]; then
+              echo "$LINE" >> features.md
+            elif [[ "$SOURCE_BRANCH" == bug/* ]]; then
+              echo "$LINE" >> bugfixes.md
+            else
+              echo "$LINE" >> others.md
+            fi
+          done
 
           cat features.md >> changelog.md
           echo "" >> changelog.md
@@ -51,14 +81,17 @@ jobs:
           echo "" >> changelog.md
           cat others.md >> changelog.md
 
-          TAG_NAME="${TARGET_BRANCH//release\//}"
-          
+          rm all_prs.json features.md bugfixes.md others.md
+
+          # Creation ou mise a jour avec inclusion de l'archive d'artefacts
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            echo "[+] Mise a jour de la release existante..."
+            echo "[+] Mise a jour de la release existante $TAG_NAME..."
             gh release edit "$TAG_NAME" --notes-file changelog.md
+            # On upload l'artefact sur la release existante
+            gh release upload "$TAG_NAME" simeis-artifacts.zip --clobber
           else
-            echo "[+] Creation de la release officielle..."
-            gh release create "$TAG_NAME" \
+            echo "[+] Creation de la release officielle $TAG_NAME avec ses artefacts..."
+            gh release create "$TAG_NAME" simeis-artifacts.zip \
               --title "Release $TAG_NAME" \
               --notes-file changelog.md \
               --target "$TARGET_BRANCH"

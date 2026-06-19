@@ -16,10 +16,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     strategy:
-      fail-fast: true # 1.3 Interrompt immédiatement tous les autres jobs si l'un d'eux fail [cite: 55]
+      fail-fast: true # 1.3 Interrompt immédiatement tous les autres jobs si l'un d'eux fail
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest] # 2.1 Multi-OS demandé [cite: 59]
-        rust_version: ["1.75.0", "1.80.0", "1.85.0", "1.88.0"] # 2.1 Versions de Rust exigées [cite: 60]
+        os: [ubuntu-latest, macos-latest, windows-latest] # 2.1 Multi-OS demandé
+        rust_version: ["1.75.0", "1.80.0", "1.85.0", "1.88.0"] # 2.1 Versions de Rust exigées
 
     steps:
       - name: Checkout code

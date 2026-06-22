@@ -3,6 +3,8 @@ name: Simeis CI
 on:
   pull_request:
     branches: [ main, "release/*" ]
+  pull_request_target: # 🌟 Ajoute cette ligne pour attraper les PR du bot
+    branches: [ main ]
   push:
     branches: [ main ]
 
@@ -25,7 +27,7 @@ permissions:
 jobs:
   # --- 1. JOB LINT (Python & Rust Format) ---
   lint:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

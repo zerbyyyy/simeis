@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+echo "[+] Configuration de Simeis post-installation..."
+
+# 1. Création de l'utilisateur système simeis s'il n'existe pas
+if ! id "simeis" &>/dev/null; then
+    useradd --system --home-dir /var/lib/simeis --create-home --shell /usr/sbin/nologin simeis
+fi
+
+# 2. Droits appropriés sur le binaire
+chmod 755 /usr/bin/simeis
+chown root:root /usr/bin/simeis
+
+# 3. Rechargement, activation et démarrage du service systemd
+systemctl daemon-reload
+systemctl enable simeis.service
+systemctl restart simeis.service
+
+echo "[+] Installation terminée avec succès ! Hackerman ready."
+exit 0

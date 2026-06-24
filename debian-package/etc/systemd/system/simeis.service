@@ -1,0 +1,13 @@
+[Unit]
+Description=Simeis Server Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=simeis
+Group=simeis
+ExecStart=/usr/bin/simeis
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

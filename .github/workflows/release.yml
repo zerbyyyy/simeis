@@ -13,13 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: read
+      pull-requests: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- ÉTAPE COMPILATION DES ARTEFACTS ---
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -32,14 +31,77 @@ jobs:
         run: |
           echo "=== Preparation du package d'artefacts ==="
           mkdir -p dist/
-          # On copie le binaire compilé
           cp target/release/simeis-server dist/
-          # On copie le SDK Python ou les scripts requis
+          mkdir -p sdk && echo "# SDK" > sdk/python.py
           cp sdk/python.py dist/
-          # On crée une archive zip propre contenant tout
           zip -r simeis-artifacts.zip dist/
 
-      # --- ÉTAPE GENERATION DU CHANGELOG & RELEASE ---
+      - name: Create Debian Package Architecture
+        run: |
+          echo "=== Preparation de l'arborescence Debian ==="
+          mkdir -p debian-package/DEBIAN
+          mkdir -p debian-package/usr/bin
+          mkdir -p debian-package/usr/share/man/man1
+          mkdir -p debian-package/etc/systemd/system
+
+          cat << 'EOF' > debian-package/DEBIAN/control
+          Package: simeis
+          Version: 1.0.0
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: cmatrix
+          Maintainer: Evan <evan@ynov.com>
+          Description: Serveur Simeis avec supervision Systemd et dependance fun.
+          EOF
+
+          cat << 'EOF' > debian-package/DEBIAN/postinst
+          #!/bin/bash
+          set -e
+          echo "[+] Configuration post-installation de Simeis..."
+          if ! id "simeis" &>/dev/null; then
+              useradd --system --home-dir /var/lib/simeis --create-home --shell /usr/sbin/nologin simeis
+          fi
+          chmod 755 /usr/bin/simeis
+          chown root:root /usr/bin/simeis
+          systemctl daemon-reload
+          systemctl enable simeis.service
+          systemctl restart simeis.service
+          echo "[+] Installation terminee. Hackerman active !"
+          EOF
+          chmod +x debian-package/DEBIAN/postinst
+
+          cat << 'EOF' > debian-package/etc/systemd/system/simeis.service
+          [Unit]
+          Description=Simeis Server Daemon
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=simeis
+          Group=simeis
+          ExecStart=/usr/bin/simeis
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          cat << 'EOF' > debian-package/usr/share/man/man1/simeis.1
+          .TH SIMEIS 1 "24 Juin 2026" "1.0.0" "Simeis Manual"
+          .SH NAME
+          simeis \- Serveur d'infrastructure Simeis
+          .SH DESCRIPTION
+          Simeis est une solution serveur automatisee et surveillee par Systemd.
+          .SH AUTHOR
+          Evan (Zerby)
+          EOF
+
+          cp target/release/simeis-server debian-package/usr/bin/simeis
+
+          echo "=== Compilation du paquet .deb ==="
+          dpkg-deb --build debian-package simeis_1.0.0_amd64.deb
+
       - name: Generate Changelog and Release via GitHub CLI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -83,15 +145,13 @@ jobs:
 
           rm all_prs.json features.md bugfixes.md others.md
 
-          # Creation ou mise a jour avec inclusion de l'archive d'artefacts
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             echo "[+] Mise a jour de la release existante $TAG_NAME..."
             gh release edit "$TAG_NAME" --notes-file changelog.md
-            # On upload l'artefact sur la release existante
-            gh release upload "$TAG_NAME" simeis-artifacts.zip --clobber
+            gh release upload "$TAG_NAME" simeis-artifacts.zip simeis_1.0.0_amd64.deb --clobber
           else
-            echo "[+] Creation de la release officielle $TAG_NAME avec ses artefacts..."
-            gh release create "$TAG_NAME" simeis-artifacts.zip \
+            echo "[+] Creation de la release officielle $TAG_NAME..."
+            gh release create "$TAG_NAME" simeis-artifacts.zip simeis_1.0.0_amd64.deb \
               --title "Release $TAG_NAME" \
               --notes-file changelog.md \
               --target "$TARGET_BRANCH"

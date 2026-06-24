@@ -14,8 +14,12 @@ from pathlib import Path
 
 # URL locale du serveur API Simeis
 API_URL = "http://127.0.0.1:8080"
-# Utilisation du binaire de debug pour les tests fonctionnels standard
-BINARY = Path("target/debug/simeis-server")
+
+# ─── Détection dynamique du binaire (CI Release vs Local Debug) ───
+BINARY_RELEASE = Path("target/release/simeis-server")
+BINARY_DEBUG = Path("target/debug/simeis-server")
+
+BINARY = BINARY_RELEASE if BINARY_RELEASE.exists() else BINARY_DEBUG
 
 # ─── Helper pour les requêtes HTTP (Sans bibliothèque tierce comme requests) ───
 
@@ -87,10 +91,11 @@ def test_scenario_3_errors() -> None:
 
 def main():
     if not BINARY.exists():
-        print(f"❌ Erreur : Le binaire {BINARY} n'existe pas. Lancez 'make build' d'abord.")
+        print("❌ Erreur : Aucun binaire simeis-server trouvé dans target/release/ ou target/debug/")
+        print("Mettez en place une étape de compilation ('cargo build' ou 'cargo build --release') avant ce script.")
         sys.exit(1)
 
-    print("=== Démarrage du serveur Simeis pour les tests fonctionnels ===")
+    print(f"=== Démarrage du serveur Simeis ({BINARY}) pour les tests fonctionnels ===")
     # Lancement du serveur en arrière-plan
     server_process = subprocess.Popen(
         [str(BINARY)],
@@ -98,17 +103,16 @@ def main():
         stderr=subprocess.DEVNULL
     )
     
-    # Attente active que le serveur API soit prêt à répondre (TP4 Optimisation)
+    # Attente active que le serveur API soit prêt à répondre
     ready = False
-    for _ in range(10):
+    for _ in range(15):
         time.sleep(0.5)
         try:
-            # Petite requête de "ping" sur le serveur pour voir s'il répond
-            urllib.request.urlopen(f"{API_URL}/player/status", timeout=0.5)
+            # On ping la racine (/) pour vérifier si l'application écoute
+            urllib.request.urlopen(f"{API_URL}/", timeout=0.5)
             ready = True
             break
         except (urllib.error.HTTPError, urllib.error.URLError):
-            # Si c'est une erreur HTTP (ex: 401/404), le serveur écoute ! C'est bon.
             if isinstance(sys.exc_info()[1], urllib.error.HTTPError):
                 ready = True
                 break
@@ -141,7 +145,7 @@ def main():
     server_process.wait()
 
     if failures > 0:
-        print(f"❌ Fin des tests : {failures} scénario(s) en échec.")
+        print(f"❌ Fin des tests : {failures} scène(s) en échec.")
         sys.exit(1)
     else:
         print("🎉 Tous les scénarios fonctionnels s'exécutent avec succès ! ✅")

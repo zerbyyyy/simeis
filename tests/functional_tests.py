@@ -43,27 +43,27 @@ def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple
 
 def test_scenario_1_economy() -> None:
     """Scénario 1 : Création joueur -> Achat vaisseau -> Achat module."""
-    print("👉 Exécution du Scénario 1 : Économie de base") [cite: 12]
+    print("👉 Exécution du Scénario 1 : Économie de base")
     
     # 1. Création du joueur Evan
-    code, body = send_request("/player/create", "POST", {"name": "Evan"}) [cite: 13]
+    code, body = send_request("/player/create", "POST", {"name": "Evan"})
     assert code in [200, 201], f"Échec création joueur: {body}"
     print("  ✓ Joueur 'Evan' créé avec succès.")
     
     # 2. Achat d'un vaisseau de type Explorer
-    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "Explorer"}) [cite: 13]
+    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "Explorer"})
     assert code == 200, f"Échec achat vaisseau: {body}"
-    print("  ✓ Vaisseau 'Explorer' acheté.") [cite: 13]
+    print("  ✓ Vaisseau 'Explorer' acheté.")
     
     # 3. Achat d'un module de minage "Miner"
-    code, body = send_request("/player/buy-module", "POST", {"module_type": "Miner"}) [cite: 14]
+    code, body = send_request("/player/buy-module", "POST", {"module_type": "Miner"})
     assert code == 200, f"Échec achat module: {body}"
-    print("  ✓ Module 'Miner' acheté et équipé.") [cite: 14]
+    print("  ✓ Module 'Miner' acheté et équipé.")
 
 
 def test_scenario_2_mechanics() -> None:
     """Scénario 2 : Déplacement spatial du vaisseau."""
-    print("👉 Exécution du Scénario 2 : Mécanique de déplacement") [cite: 17]
+    print("👉 Exécution du Scénario 2 : Mécanique de déplacement")
     
     # Simulation d'un déplacement vers un secteur précis
     code, body = send_request("/ship/travel", "POST", {"destination": "Simeis-Alpha"})
@@ -77,7 +77,7 @@ def test_scenario_2_mechanics() -> None:
 
 def test_scenario_3_errors() -> None:
     """Scénario 3 : Gestion des limites économiques et refus de transaction."""
-    print("👉 Exécution du Scénario 3 : Limites financières") [cite: 17]
+    print("👉 Exécution du Scénario 3 : Limites financières")
     
     # Tentative d'achat d'un vaisseau hors de prix pour forcer un code de refus (ex: 400 Bad Request)
     code, body = send_request("/player/buy-ship", "POST", {"ship_type": "DeathStar"})
@@ -91,7 +91,7 @@ def test_scenario_3_errors() -> None:
 
 def main():
     if not BINARY.exists():
-        print(f"❌ Erreur : Aucun binaire simeis-server trouvé dans target/release/ ou target/debug/.")
+        print("❌ Erreur : Aucun binaire simeis-server trouvé dans target/release/ ou target/debug/")
         print("Mettez en place une étape de compilation ('cargo build' ou 'cargo build --release') avant ce script.")
         sys.exit(1)
 
@@ -105,15 +105,14 @@ def main():
     
     # Attente active que le serveur API soit prêt à répondre
     ready = False
-    for _ in range(15):  # Augmenté à 15 itérations pour donner plus de marge à la CI
+    for _ in range(15):
         time.sleep(0.5)
         try:
-            # On ping la racine (/) pour vérifier si l'application écoute, évitant les crashs d'auth
+            # On ping la racine (/) pour vérifier si l'application écoute
             urllib.request.urlopen(f"{API_URL}/", timeout=0.5)
             ready = True
             break
         except (urllib.error.HTTPError, urllib.error.URLError):
-            # Si c'est une erreur HTTP (ex: 404 / 401), le serveur tourne et écoute, c'est bon !
             if isinstance(sys.exc_info()[1], urllib.error.HTTPError):
                 ready = True
                 break
@@ -146,7 +145,7 @@ def main():
     server_process.wait()
 
     if failures > 0:
-        print(f"❌ Fin des tests : {failures} scénario(s) en échec.")
+        print(f"❌ Fin des tests : {failures} scène(s) en échec.")
         sys.exit(1)
     else:
         print("🎉 Tous les scénarios fonctionnels s'exécutent avec succès ! ✅")

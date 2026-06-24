@@ -14,8 +14,12 @@ from pathlib import Path
 
 # URL locale du serveur API Simeis
 API_URL = "http://127.0.0.1:8080"
-# Utilisation du binaire de debug pour les tests fonctionnels standard
-BINARY = Path("target/debug/simeis-server")
+
+# ─── Détection dynamique du binaire (CI Release vs Local Debug) ───
+BINARY_RELEASE = Path("target/release/simeis-server")
+BINARY_DEBUG = Path("target/debug/simeis-server")
+
+BINARY = BINARY_RELEASE if BINARY_RELEASE.exists() else BINARY_DEBUG
 
 # ─── Helper pour les requêtes HTTP (Sans bibliothèque tierce comme requests) ───
 
@@ -39,27 +43,27 @@ def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple
 
 def test_scenario_1_economy() -> None:
     """Scénario 1 : Création joueur -> Achat vaisseau -> Achat module."""
-    print("👉 Exécution du Scénario 1 : Économie de base")
+    print("👉 Exécution du Scénario 1 : Économie de base") [cite: 12]
     
     # 1. Création du joueur Evan
-    code, body = send_request("/player/create", "POST", {"name": "Evan"})
+    code, body = send_request("/player/create", "POST", {"name": "Evan"}) [cite: 13]
     assert code in [200, 201], f"Échec création joueur: {body}"
     print("  ✓ Joueur 'Evan' créé avec succès.")
     
     # 2. Achat d'un vaisseau de type Explorer
-    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "Explorer"})
+    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "Explorer"}) [cite: 13]
     assert code == 200, f"Échec achat vaisseau: {body}"
-    print("  ✓ Vaisseau 'Explorer' acheté.")
+    print("  ✓ Vaisseau 'Explorer' acheté.") [cite: 13]
     
     # 3. Achat d'un module de minage "Miner"
-    code, body = send_request("/player/buy-module", "POST", {"module_type": "Miner"})
+    code, body = send_request("/player/buy-module", "POST", {"module_type": "Miner"}) [cite: 14]
     assert code == 200, f"Échec achat module: {body}"
-    print("  ✓ Module 'Miner' acheté et équipé.")
+    print("  ✓ Module 'Miner' acheté et équipé.") [cite: 14]
 
 
 def test_scenario_2_mechanics() -> None:
     """Scénario 2 : Déplacement spatial du vaisseau."""
-    print("👉 Exécution du Scénario 2 : Mécanique de déplacement")
+    print("👉 Exécution du Scénario 2 : Mécanique de déplacement") [cite: 17]
     
     # Simulation d'un déplacement vers un secteur précis
     code, body = send_request("/ship/travel", "POST", {"destination": "Simeis-Alpha"})
@@ -73,7 +77,7 @@ def test_scenario_2_mechanics() -> None:
 
 def test_scenario_3_errors() -> None:
     """Scénario 3 : Gestion des limites économiques et refus de transaction."""
-    print("👉 Exécution du Scénario 3 : Limites financières")
+    print("👉 Exécution du Scénario 3 : Limites financières") [cite: 17]
     
     # Tentative d'achat d'un vaisseau hors de prix pour forcer un code de refus (ex: 400 Bad Request)
     code, body = send_request("/player/buy-ship", "POST", {"ship_type": "DeathStar"})
@@ -87,10 +91,11 @@ def test_scenario_3_errors() -> None:
 
 def main():
     if not BINARY.exists():
-        print(f"❌ Erreur : Le binaire {BINARY} n'existe pas. Lancez 'make build' d'abord.")
+        print(f"❌ Erreur : Aucun binaire simeis-server trouvé dans target/release/ ou target/debug/.")
+        print("Mettez en place une étape de compilation ('cargo build' ou 'cargo build --release') avant ce script.")
         sys.exit(1)
 
-    print("=== Démarrage du serveur Simeis pour les tests fonctionnels ===")
+    print(f"=== Démarrage du serveur Simeis ({BINARY}) pour les tests fonctionnels ===")
     # Lancement du serveur en arrière-plan
     server_process = subprocess.Popen(
         [str(BINARY)],
@@ -98,17 +103,17 @@ def main():
         stderr=subprocess.DEVNULL
     )
     
-    # Attente active que le serveur API soit prêt à répondre (TP4 Optimisation)
+    # Attente active que le serveur API soit prêt à répondre
     ready = False
-    for _ in range(10):
+    for _ in range(15):  # Augmenté à 15 itérations pour donner plus de marge à la CI
         time.sleep(0.5)
         try:
-            # Petite requête de "ping" sur le serveur pour voir s'il répond
-            urllib.request.urlopen(f"{API_URL}/player/status", timeout=0.5)
+            # On ping la racine (/) pour vérifier si l'application écoute, évitant les crashs d'auth
+            urllib.request.urlopen(f"{API_URL}/", timeout=0.5)
             ready = True
             break
         except (urllib.error.HTTPError, urllib.error.URLError):
-            # Si c'est une erreur HTTP (ex: 401/404), le serveur écoute ! C'est bon.
+            # Si c'est une erreur HTTP (ex: 404 / 401), le serveur tourne et écoute, c'est bon !
             if isinstance(sys.exc_info()[1], urllib.error.HTTPError):
                 ready = True
                 break

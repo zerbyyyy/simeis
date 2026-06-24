@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 # URL locale du serveur API Simeis
-API_URL = "http://127.0.0.1:8080"
+API_URL = "http://127.0.0.1:8081"
 
 # ─── Détection dynamique du binaire (CI Release vs Local Debug) ───
 BINARY_RELEASE = Path("target/release/simeis-server")

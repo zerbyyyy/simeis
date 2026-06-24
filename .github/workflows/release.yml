@@ -11,6 +11,8 @@ jobs:
     name: Generation de la Release Officielle
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    
+    # 🛠️ CORRECTION DES PERMISSIONS (Indispensable pour créer une Release et uploader des fichiers)
     permissions:
       contents: write
       pull-requests: write
@@ -22,6 +24,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # Utilisation du profil de test isolé dans /tmp pour s'affranchir du lockfile v4 racine sur les vieux outils
       - name: Build Rust Server in Release Mode
         run: |
           echo "=== Compilation du serveur en mode Release ==="
@@ -106,6 +109,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           echo "=== Recuperation de toutes les PRs de la release ==="
           TAG_NAME="${TARGET_BRANCH//release\//}"
@@ -117,23 +125,36 @@ jobs:
           echo "### 🐛 Bugfixes" > bugfixes.md
           echo "### 📦 Autres changements" > others.md
 
-          gh pr list --base "$TARGET_BRANCH" --state merged --json title,number,url,headRefName,author --limit 100 > all_prs.json
+          # Ligne de secours : si l'API gh pr list est vide, on force l'inclusion de la PR actuelle pour remplir le changelog
+          LINE="- $PR_TITLE ([#$PR_NUMBER]($PR_URL)) @$PR_AUTHOR"
+          if [[ "$HEAD_BRANCH" == feature/* ]]; then
+            echo "$LINE" >> features.md
+          elif [[ "$HEAD_BRANCH" == bug/* ]]; then
+            echo "$LINE" >> bugfixes.md
+          else
+            echo "$LINE" >> others.md
+          fi
+
+          # On tente quand même de lister les autres si elles existent
+          gh pr list --base "$TARGET_BRANCH" --state merged --json title,number,url,headRefName,author --limit 100 > all_prs.json || echo "[]" > all_prs.json
 
           jq -c '.[]' all_prs.json | while read -r pr; do
-            TITLE=$(echo "$pr" | jq -r '.title')
             NUMBER=$(echo "$pr" | jq -r '.number')
-            URL=$(echo "$pr" | jq -r '.url')
-            SOURCE_BRANCH=$(echo "$pr" | jq -r '.headRefName')
-            AUTHOR=$(echo "$pr" | jq -r '.author.login')
-
-            LINE="- $TITLE ([#$NUMBER]($URL)) @$AUTHOR"
-
-            if [[ "$SOURCE_BRANCH" == feature/* ]]; then
-              echo "$LINE" >> features.md
-            elif [[ "$SOURCE_BRANCH" == bug/* ]]; then
-              echo "$LINE" >> bugfixes.md
-            else
-              echo "$LINE" >> others.md
+            # Évite de dupliquer la PR en cours
+            if [ "$NUMBER" != "$PR_NUMBER" ]; then
+              TITLE=$(echo "$pr" | jq -r '.title')
+              URL=$(echo "$pr" | jq -r '.url')
+              SOURCE_BRANCH=$(echo "$pr" | jq -r '.headRefName')
+              AUTHOR=$(echo "$pr" | jq -r '.author.login')
+              
+              CURRENT_LINE="- $TITLE ([#$NUMBER]($URL)) @$AUTHOR"
+              if [[ "$SOURCE_BRANCH" == feature/* ]]; then
+                echo "$CURRENT_LINE" >> features.md
+              elif [[ "$SOURCE_BRANCH" == bug/* ]]; then
+                echo "$CURRENT_LINE" >> bugfixes.md
+              else
+                echo "$CURRENT_LINE" >> others.md
+              fi
             fi
           done
 

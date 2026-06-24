@@ -1,0 +1,8 @@
+Package: simeis
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: cmatrix
+Maintainer: Evan <evan@ynov.com>
+Description: Serveur hautes performances Simeis avec supervision Systemd.

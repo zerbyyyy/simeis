@@ -46,12 +46,12 @@ def test_scenario_1_economy() -> None:
     print("👉 Exécution du Scénario 1 : Économie de base")
     
     # 1. Création du joueur Evan
-    code, body = send_request("/player/create", "POST", {"name": "Evan"})
-    assert code in [200, 201], f"Échec création joueur: {body}"
+    code, body = send_request("/player/new", "POST", {"name": "Evan"})
+    assert code in [200], f"Échec création joueur: {body}"
     print("  ✓ Joueur 'Evan' créé avec succès.")
     
-    # 2. Achat d'un vaisseau de type Explorer
-    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "Explorer"})
+    # 2. Achat d'un vaisseau 
+    code, body = send_request("/station/{station_id}/shipyard/buy/{ship_id}", "POST", {"modetype": "Explorer"})
     assert code == 200, f"Échec achat vaisseau: {body}"
     print("  ✓ Vaisseau 'Explorer' acheté.")
     

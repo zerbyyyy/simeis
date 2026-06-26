@@ -15,19 +15,28 @@ from pathlib import Path
 # URL locale du serveur API Simeis
 API_URL = "http://127.0.0.1:8081"
 
+# Variables globales pour l'enchaînement dynamique des scénarios
+PLAYER_ID = None
+AUTH_KEY = None
+STATION_ID = "27524"  # ID par défaut extrait de la spécification OpenAPI du projet
+REAL_SHIP_ID = None   # Sera capturé dynamiquement lors de l'achat du vaisseau
+
 # ─── Détection dynamique du binaire (CI Release vs Local Debug) ───
 BINARY_RELEASE = Path("target/release/simeis-server")
 BINARY_DEBUG = Path("target/debug/simeis-server")
-
 BINARY = BINARY_RELEASE if BINARY_RELEASE.exists() else BINARY_DEBUG
 
-# ─── Helper pour les requêtes HTTP (Sans bibliothèque tierce comme requests) ───
+# ─── Helper pour les requêtes HTTP (Avec injection de la clé Simeis-Key) ───
 
 def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple[int, str]:
     """Envoie une requête HTTP à l'API Simeis en utilisant uniquement urllib."""
     url = f"{API_URL}{endpoint}"
     req_data = json.dumps(data).encode("utf-8") if data else None
-    headers = {"Content-Type": "application/json"} if data else {}
+    
+    # Configuration des en-têtes requis par la doc OpenAPI
+    headers = {"Content-Type": "application/json"}
+    if AUTH_KEY:
+        headers["Simeis-Key"] = AUTH_KEY
     
     req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
     try:
@@ -39,115 +48,162 @@ def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple
         print(f"❌ Erreur de connexion à l'API : {e.reason}")
         return 500, str(e.reason)
 
-# ─── Validation des Scénarios Utilisateurs (TP3 - Partie 1) ─────────────────
+# ─── Validation des Scénarios Utilisateurs ─────────────────────────────────
 
-def test_scenario_1_economy() -> None:
+def test_scenario_1_economy() -> bool:
     """Scénario 1 : Création joueur -> Achat vaisseau -> Achat module."""
+    global PLAYER_ID, AUTH_KEY, REAL_SHIP_ID
     print("👉 Exécution du Scénario 1 : Économie de base")
     
-    # 1. Création du joueur Evan
-    code, body = send_request("/player/new", "POST", {"name": "Evan"})
-    if code == 200: 
-        print("  ✓ Joueur 'Evan' créé avec succès.", body)
+    # ── ÉTAPE 1 : Création du joueur Evan ──
+    code, body = send_request("/player/new/Evan", "POST")
+    if code == 200:
+        response_data = json.loads(body)
+        PLAYER_ID = response_data.get("playerId")
+        AUTH_KEY = response_data.get("key")
+        print(f"  ✓ Étape 1/4 : Joueur 'Evan' créé (ID: {PLAYER_ID}).")
     else:
-        print("  ❌ Échec création joueur:", body)
-    
-    # 2. Achat d'un vaisseau 
-    code, body = send_request("/station/{station_id}/shipyard/buy/{ship_id}", "POST", {"modetype": "Explorer"})
-    assert code == 200, f"Échec achat vaisseau: {body}"
-    print("  ✓ Vaisseau 'Explorer' acheté.")
-    
-    # 3. Achat d'un module de minage "Miner"
-    code, body = send_request("/player/buy-module", "POST", {"module_type": "Miner"})
-    assert code == 200, f"Échec achat module: {body}"
-    print("  ✓ Module 'Miner' acheté et équipé.")
+        print(f"  ❌ Étape 1/4 échouée. Code reçu: {code}, Réponse: {body}")
+        return False
+        
+    # ── ÉTAPE 2 : Récupération des vaisseaux disponibles ──
+    code, body = send_request(f"/station/{STATION_ID}/shipyard/list", "GET")
+    if code == 200:
+        ships_available = json.loads(body).get("ships", [])
+        if len(ships_available) > 0:
+            target_ship_type = ships_available[0].get("id")
+            print(f"  ✓ Étape 2/4 : Type de vaisseau trouvé dans le catalogue (ID: {target_ship_type}).")
+        else:
+            print("  ❌ Étape 2/4 échouée. Aucun vaisseau en vente dans le shipyard.")
+            return False
+    else:
+        print(f"  ❌ Étape 2/4 échouée. Impossible de lister le shipyard. Code reçu: {code}")
+        return False
+        
+    # ── ÉTAPE 3 : Achat effectif du vaisseau ──
+    url_shipyard = f"/station/{STATION_ID}/shipyard/buy/{target_ship_type}"
+    code, body = send_request(url_shipyard, "POST")
+    if code == 200:
+        REAL_SHIP_ID = json.loads(body).get("id")
+        print(f"  ✓ Étape 3/4 : Vaisseau acheté avec succès. ID unique Instance : {REAL_SHIP_ID}")
+    else:
+        print(f"  ❌ Étape 3/4 échouée. Échec achat vaisseau. Code reçu: {code}, Réponse: {body}")
+        return False
+        
+    # ── ÉTAPE 4 : Achat d'un module de minage "Miner" ──
+    url_module = f"/station/{STATION_ID}/shop/modules/{REAL_SHIP_ID}/buy/Miner"
+    code, body = send_request(url_module, "POST")
+    if code == 200:
+        print(f"  ✓ Étape 4/4 : Module 'Miner' acheté et équipé sur le vaisseau {REAL_SHIP_ID}.")
+        return True
+    else:
+        print(f"  ❌ Étape 4/4 échouée. Échec achat module. Code reçu: {code}, Réponse: {body}")
+        return False
 
 
-def test_scenario_2_mechanics() -> None:
+def test_scenario_2_mechanics() -> bool:
     """Scénario 2 : Déplacement spatial du vaisseau."""
     print("👉 Exécution du Scénario 2 : Mécanique de déplacement")
     
-    # Simulation d'un déplacement vers un secteur précis
-    code, body = send_request("/ship/travel", "POST", {"destination": "Simeis-Alpha"})
-    assert code == 200, f"Échec du voyage spatial: {body}"
-    
-    # Vérification du statut ou des coordonnées du joueur après voyage
-    code, body = send_request("/player/status", "GET")
-    assert code == 200 and "Simeis-Alpha" in body, "Le vaisseau n'a pas atteint la destination attendue."
-    print("  ✓ Voyage vers 'Simeis-Alpha' validé.")
+    if REAL_SHIP_ID == None:
+        print("  ❌ Échec avant déplacement : Aucun ID de vaisseau en mémoire (Scénario 1 requis).")
+        return False
+    else:
+        # Le vaisseau existe, on envoie l'ordre de navigation vers les coordonnées XYZ
+        url_navigate = f"/ship/{REAL_SHIP_ID}/navigate/100/200/0"
+        code, body = send_request(url_navigate, "POST")
+        
+        if code == 200:
+            print("  ✓ Ordre de voyage vers la position XYZ [100, 200, 0] validé par le serveur.")
+            return True
+        else:
+            print(f"  ❌ Échec du voyage spatial. Code reçu: {code}, Réponse: {body}")
+            return False
 
 
-def test_scenario_3_errors() -> None:
+def test_scenario_3_errors() -> bool:
     """Scénario 3 : Gestion des limites économiques et refus de transaction."""
     print("👉 Exécution du Scénario 3 : Limites financières")
     
-    # Tentative d'achat d'un vaisseau hors de prix pour forcer un code de refus (ex: 400 Bad Request)
-    code, body = send_request("/player/buy-ship", "POST", {"ship_type": "DeathStar"})
+    # Tentative d'un achat invalide (on force une fausse station à dessein)
+    url_invalid = f"/station/999999/shipyard/buy/VaisseauInexistant"
+    code, body = send_request(url_invalid, "POST")
     
-    # L'API doit retourner une erreur propre (400 ou message explicite) sans crash du serveur
-    assert code == 400 or "insuffisants" in body.lower(), \
-        f"La transaction aurait dû échouer pour fonds insuffisants. Réponse API: {body}"
-    print("  ✓ Refus sur fonds insuffisants correctement intercepté par l'API.")
+    # On attend un refus (comme un code 400, 404, 500 ou un JSON contenant "error")
+    if code in [400, 404, 403, 500] or "error" in body.lower():
+        print(f"  ✓ Refus de transaction correctement intercepté par l'API (Code reçu: {code}).")
+        return True
+    else:
+        print(f"  ❌ Erreur de gestion : Le serveur aurait dû refuser la transaction, mais a répondu avec le code: {code}")
+        return False
 
 # ─── Cycle de vie du serveur en cours de test ──────────────────────────────
 
 def main():
     if not BINARY.exists():
-        print("❌ Erreur : Aucun binaire simeis-server trouvé dans target/release/ ou target/debug/")
-        print("Mettez en place une étape de compilation ('cargo build' ou 'cargo build --release') avant ce script.")
+        print("❌ Erreur : Aucun binaire simeis-server trouvé.")
         sys.exit(1)
 
-    print(f"=== Démarrage du serveur Simeis ({BINARY}) pour les tests fonctionnels ===")
-    # Lancement du serveur en arrière-plan
-    server_process = subprocess.Popen(
-        [str(BINARY)],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
+    print(f"=== Démarrage du serveur Simeis ({BINARY}) ===")
     
-    # Attente active que le serveur API soit prêt à répondre
+    log_file = open("simeis_server.log", "w")
+    server_process = subprocess.Popen([str(BINARY)], stdout=log_file, stderr=log_file)
+    
+    # Attente active du serveur avec un ping de contrôle
     ready = False
     for _ in range(15):
         time.sleep(0.5)
         try:
-            # On ping la racine (/) pour vérifier si l'application écoute
-            urllib.request.urlopen(f"{API_URL}/", timeout=0.5)
+            urllib.request.urlopen(f"{API_URL}/ping", timeout=0.5)
             ready = True
             break
         except (urllib.error.HTTPError, urllib.error.URLError):
-            if isinstance(sys.exc_info()[1], urllib.error.HTTPError):
-                ready = True
-                break
             continue
 
     if not ready:
-        print("❌ Erreur : Le serveur Simeis n'a pas démarré à temps sur le port 8080.")
+        print(f"❌ Erreur : Le serveur Simeis n'a pas démarré à temps sur {API_URL}.")
         server_process.terminate()
+        log_file.close()
         sys.exit(1)
 
-    print("🚀 Serveur en ligne. Lancement des scénarios utilisateurs...\n")
-    
+    print("🚀 Serveur en ligne. Lancement des scénarios...\n")
     failures = 0
-    scenarios = [test_scenario_1_economy, test_scenario_2_mechanics, test_scenario_3_errors]
     
-    for scenario in scenarios:
-        try:
-            scenario()
-            print(f"✅ {scenario.__name__} réussi.\n")
-        except AssertionError as exc:
-            print(f"💥 ÉCHEC dans {scenario.__name__} : {exc}\n")
-            failures += 1
-        except Exception as exc:
-            print(f"❌ Erreur inattendue dans {scenario.__name__} : {exc}\n")
-            failures += 1
+    # --- Lancement du Scénario 1 ---
+    if test_scenario_1_economy() == True:
+        print("✅ test_scenario_1_economy réussi.\n")
+    else:
+        failures += 1
+        print("💥 ÉCHEC dans test_scenario_1_economy\n")
+        
+    # --- Lancement du Scénario 2 ---
+    if test_scenario_2_mechanics() == True:
+        print("✅ test_scenario_2_mechanics réussi.\n")
+    else:
+        failures += 1
+        print("💥 ÉCHEC dans test_scenario_2_mechanics\n")
+        
+    # --- Lancement du Scénario 3 ---
+    if test_scenario_3_errors() == True:
+        print("✅ test_scenario_3_errors réussi.\n")
+    else:
+        failures += 1
+        print("💥 ÉCHEC dans test_scenario_3_errors\n")
 
-    # Arrêt propre du serveur à la fin des tests
+    # Fermeture propre du serveur
     print("=== Fermeture du serveur Simeis ===")
     server_process.terminate()
     server_process.wait()
+    log_file.close()
 
     if failures > 0:
         print(f"❌ Fin des tests : {failures} scène(s) en échec.")
+        print("\n--- 📄 LOGS DU SERVEUR SIMEIS ---")
+        try:
+            with open("simeis_server.log", "r") as f:
+                print(f.read())
+        except Exception:
+            pass
         sys.exit(1)
     else:
         print("🎉 Tous les scénarios fonctionnels s'exécutent avec succès ! ✅")

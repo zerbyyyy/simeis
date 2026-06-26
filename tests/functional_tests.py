@@ -15,10 +15,10 @@ from pathlib import Path
 # URL locale du serveur API Simeis (Port 8081)
 API_URL = "http://127.0.0.1:8081"
 
-# Variables globales pour l'enchaînement dynamique des scénarios
+# Variables globales dynamiques (Remplies par le serveur)
 PLAYER_ID = None
 AUTH_KEY = None
-STATION_ID = "27524"  # ID par défaut extrait du Swagger
+STATION_ID = None     # Trouvé dynamiquement
 REAL_SHIP_ID = None   # Capturé à l'achat du vaisseau
 
 # ─── Détection dynamique du binaire (CI Release vs Local Debug) ───
@@ -26,27 +26,7 @@ BINARY_RELEASE = Path("target/release/simeis-server")
 BINARY_DEBUG = Path("target/debug/simeis-server")
 BINARY = BINARY_RELEASE if BINARY_RELEASE.exists() else BINARY_DEBUG
 
-# ─── Helper pour récupérer l'argent actuel du joueur depuis /gamestats ───
-
-def get_player_money() -> float:
-    """Récupère le solde actuel du joueur en interrogeant /gamestats."""
-    url = f"{API_URL}/gamestats"
-    req = urllib.request.Request(url, method="GET")
-    if AUTH_KEY:
-        req.add_header("Simeis-Key", AUTH_KEY)
-        
-    try:
-        with urllib.request.urlopen(req, timeout=5) as response:
-            stats = json.loads(response.read().decode("utf-8"))
-            player_str_id = str(PLAYER_ID)
-            if player_str_id in stats:
-                return float(stats[player_str_id].get("money", 0.0))
-            else:
-                return 0.0
-    except Exception:
-        return 0.0
-
-# ─── Helper pour les requêtes HTTP (Avec injection de la clé Simeis-Key) ───
+# ─── Helper pour les requêtes HTTP ───
 
 def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple[int, str]:
     """Envoie une requête HTTP à l'API Simeis en utilisant uniquement urllib."""
@@ -67,11 +47,23 @@ def send_request(endpoint: str, method: str = "GET", data: dict = None) -> tuple
         print(f"❌ Erreur de connexion à l'API : {e.reason}")
         return 500, str(e.reason)
 
+# ─── Helper pour récupérer l'argent actuel du joueur ───
+
+def get_player_money() -> float:
+    """Récupère le solde actuel du joueur depuis /gamestats."""
+    code, body = send_request("/gamestats", "GET")
+    if code == 200:
+        stats = json.loads(body)
+        player_str_id = str(PLAYER_ID)
+        if player_str_id in stats:
+            return float(stats[player_str_id].get("money", 0.0))
+    return 0.0
+
 # ─── Validation des Scénarios Utilisateurs ─────────────────────────────────
 
 def test_scenario_1_economy() -> bool:
-    """Scénario 1 : Validation stricte de l'économie selon les exigences."""
-    global PLAYER_ID, AUTH_KEY, REAL_SHIP_ID
+    """Scénario 1 : Validation de l'économie réelle (Création -> Recherche -> Achat -> Module)."""
+    global PLAYER_ID, AUTH_KEY, STATION_ID, REAL_SHIP_ID
     print("👉 Exécution du Scénario 1 : Économie de base")
     
     # 1. On crée un nouveau joueur
@@ -85,61 +77,101 @@ def test_scenario_1_economy() -> bool:
         print(f"  ❌ Échec création joueur. Code reçu: {code}")
         return False
         
-    # 2. Vérification de son argent de départ X
-    argent_depart = get_player_money()
-    print(f"  ✓ Argent de départ détecté : {argent_depart} crédits.")
+    # 2. Récupération de l'argent de départ et de la station de départ du joueur
+    code, body = send_request("/gamestats", "GET")
+    if code == 200:
+        stats = json.loads(body)
+        player_info = stats.get(str(PLAYER_ID), {})
+        argent_depart = player_info.get("money", 0.0)
+        print(f"  ✓ Argent de départ détecté : {argent_depart} crédits.")
+        
+        # On regarde les stations possédées ou associées au joueur dans les stats
+        stations_joueur = player_info.get("stations", {})
+        if len(stations_joueur) > 0:
+            # On récupère le premier ID de station disponible pour ce joueur
+            STATION_ID = list(stations_joueur.keys())[0]
+            print(f"  ✓ Station de départ détectée dynamiquement : {STATION_ID}")
+        else:
+            # Si le joueur n'a pas de station directement liée, on prend celle de l'exemple du prof
+            STATION_ID = "27524"
+            print(f"  ⚠️ Aucune station liée au joueur. Utilisation de la station par défaut : {STATION_ID}")
+    else:
+        print("  ❌ Impossible de lire /gamestats pour l'initialisation.")
+        return False
+
+    # 3. Recherche d'un vrai vaisseau disponible à la vente
+    target_ship_type = None
     
-    # On récupère le catalogue du shipyard pour savoir quoi acheter
+    # On teste d'abord le shipyard de notre station actuelle
     code_list, body_list = send_request(f"/station/{STATION_ID}/shipyard/list", "GET")
-    if code_list != 200:
-        print("  ❌ Impossible de lister le shipyard pour trouver un vaisseau.")
-        return False
+    if code_list == 200:
+        ships_available = json.loads(body_list).get("ships", [])
+        if len(ships_available) > 0:
+            target_ship_type = ships_available[0].get("id")
+            
+    # Si le shipyard de notre station est vide, on scanne pour trouver d'autres stations de l'univers !
+    if target_ship_type is None:
+        print(f"  🔍 Shipyard de la station {STATION_ID} vide. Lancement d'un scan spatial...")
+        code_scan, body_scan = send_request(f"/station/{STATION_ID}/scan", "POST")
         
-    ships_available = json.loads(body_list).get("ships", [])
-    if len(ships_available) == 0:
-        print("  ❌ Le catalogue du shipyard est vide. Impossible de tester l'achat.")
+        if code_scan == 200:
+            scan_data = json.loads(body_scan)
+            stations_autour = scan_data.get("stations", [])
+            
+            # On parcourt les stations trouvées par le scanner pour checker leur catalogue
+            for st in stations_autour:
+                proche_id = str(st.get("id"))
+                code_st, body_st = send_request(f"/station/{proche_id}/shipyard/list", "GET")
+                if code_st == 200:
+                    ships = json.loads(body_st).get("ships", [])
+                    if len(ships) > 0:
+                        STATION_ID = proche_id
+                        target_ship_type = ships[0].get("id")
+                        print(f"  🎯 Station avec catalogue trouvé ! Nouvelle STATION_ID : {STATION_ID}")
+                        break
+
+    # Si après le scan complet, rien n'est trouvé, le serveur est vide au démarrage
+    if target_ship_type is None:
+        print("  ❌ Échec : Aucun vaisseau n'est disponible à la vente dans tout l'univers Simeis.")
         return False
-        
-    target_ship_type = ships_available[0].get("id")
-    
-    # 3. On achète un vaisseau
+
+    # 4. Achat réel du vaisseau trouvé
+    print(f"  🛒 Tentative d'achat du vaisseau {target_ship_type} sur la station {STATION_ID}...")
     url_shipyard = f"/station/{STATION_ID}/shipyard/buy/{target_ship_type}"
     code_buy, body_buy = send_request(url_shipyard, "POST")
     
-    # 4. La transaction doit réussir (Code 200)
     if code_buy == 200:
         REAL_SHIP_ID = json.loads(body_buy).get("id")
         print(f"  ✓ Transaction réussie. Vaisseau acheté (ID Instance: {REAL_SHIP_ID}).")
     else:
-        print(f"  ❌ Échec de la transaction d'achat du vaisseau. Code: {code_buy}")
+        print(f"  ❌ Échec de la transaction d'achat du vaisseau. Code serveur: {code_buy}")
         return False
         
-    # 5. Notre argent doit avoir diminué
+    # 5. Vérification réelle de la diminution de l'argent
     argent_apres_vaisseau = get_player_money()
     if argent_apres_vaisseau < argent_depart:
-        print(f"  ✓ Vérification : L'argent a diminué ({argent_depart} -> {argent_apres_vaisseau}).")
+        print(f"  ✓ L'argent a diminué ({argent_depart} -> {argent_apres_vaisseau}).")
     else:
-        print(f"  ❌ Erreur : L'argent n'a pas diminué après l'achat du vaisseau ! ({argent_apres_vaisseau})")
+        print(f"  ❌ TRANSACTION INVALIDÉE : L'argent n'a pas baissé après l'achat du vaisseau ! ({argent_apres_vaisseau})")
         return False
         
-    # 6. On achète un module de Miner
+    # 6. Achat réel d'un module de Miner
     url_module = f"/station/{STATION_ID}/shop/modules/{REAL_SHIP_ID}/buy/Miner"
     code_mod, body_mod = send_request(url_module, "POST")
     
-    # 7. La transaction doit réussir (Code 200)
     if code_mod == 200:
         print("  ✓ Transaction réussie. Module 'Miner' acheté et équipé.")
     else:
-        print(f"  ❌ Échec de la transaction d'achat du module. Code: {code_mod}")
+        print(f"  ❌ Échec de la transaction d'achat du module. Code serveur: {code_mod}")
         return False
         
-    # 8. Notre argent doit avoir encore diminué
+    # 7. Vérification finale de la nouvelle baisse d'argent
     argent_final = get_player_money()
     if argent_final < argent_apres_vaisseau:
-        print(f"  ✓ Vérification : L'argent a encore diminué ({argent_apres_vaisseau} -> {argent_final}).")
+        print(f"  ✓ L'argent a encore diminué ({argent_apres_vaisseau} -> {argent_final}).")
         return True
     else:
-        print(f"  ❌ Erreur : L'argent n'a pas bougé après l'achat du module ! ({argent_final})")
+        print(f"  ❌ TRANSACTION INVALIDÉE : L'argent n'a pas baissé après le module ! ({argent_final})")
         return False
 
 
@@ -148,17 +180,17 @@ def test_scenario_2_mechanics() -> bool:
     print("👉 Exécution du Scénario 2 : Mécanique de déplacement")
     
     if REAL_SHIP_ID is None:
-        print("  ❌ Aucun ID de vaisseau en mémoire (Scénario 1 requis).")
+        print("  ❌ Aucun ID de vaisseau en mémoire.")
         return False
+    
+    url_navigate = f"/ship/{REAL_SHIP_ID}/navigate/100/200/0"
+    code, body = send_request(url_navigate, "POST")
+    if code == 200:
+        print("  ✓ Déplacement spatial validé par le serveur.")
+        return True
     else:
-        url_navigate = f"/ship/{REAL_SHIP_ID}/navigate/100/200/0"
-        code, body = send_request(url_navigate, "POST")
-        if code == 200:
-            print("  ✓ Ordre de voyage vers la position XYZ [100, 200, 0] validé.")
-            return True
-        else:
-            print(f"  ❌ Échec du voyage spatial. Code reçu: {code}")
-            return False
+        print(f"  ❌ Échec du déplacement spatial. Code reçu: {code}")
+        return False
 
 
 def test_scenario_3_errors() -> bool:

@@ -12,7 +12,7 @@ import urllib.error
 import json
 from pathlib import Path
 
-# URL locale du serveur API Simeis
+# URL locale du serveur API Simeis (Configuré sur ton port 8081)
 API_URL = "http://127.0.0.1:8081"
 
 # Variables globales pour l'enchaînement dynamique des scénarios
@@ -105,7 +105,7 @@ def test_scenario_2_mechanics() -> bool:
     """Scénario 2 : Déplacement spatial du vaisseau."""
     print("👉 Exécution du Scénario 2 : Mécanique de déplacement")
     
-    if REAL_SHIP_ID == None:
+    if REAL_SHIP_ID is None:
         print("  ❌ Échec avant déplacement : Aucun ID de vaisseau en mémoire (Scénario 1 requis).")
         return False
     else:
@@ -125,8 +125,8 @@ def test_scenario_3_errors() -> bool:
     """Scénario 3 : Gestion des limites économiques et refus de transaction."""
     print("👉 Exécution du Scénario 3 : Limites financières")
     
-    # Tentative d'un achat invalide (on force une fausse station à dessein)
-    url_invalid = f"/station/999999/shipyard/buy/VaisseauInexistant"
+    # Tentative d'un achat invalide (Le f de la chaîne de caractères a été retiré ici)
+    url_invalid = "/station/999999/shipyard/buy/VaisseauInexistant"
     code, body = send_request(url_invalid, "POST")
     
     # On attend un refus (comme un code 400, 404, 500 ou un JSON contenant "error")
@@ -170,21 +170,21 @@ def main():
     failures = 0
     
     # --- Lancement du Scénario 1 ---
-    if test_scenario_1_economy() == True:
+    if test_scenario_1_economy():
         print("✅ test_scenario_1_economy réussi.\n")
     else:
         failures += 1
         print("💥 ÉCHEC dans test_scenario_1_economy\n")
         
     # --- Lancement du Scénario 2 ---
-    if test_scenario_2_mechanics() == True:
+    if test_scenario_2_mechanics():
         print("✅ test_scenario_2_mechanics réussi.\n")
     else:
         failures += 1
         print("💥 ÉCHEC dans test_scenario_2_mechanics\n")
         
     # --- Lancement du Scénario 3 ---
-    if test_scenario_3_errors() == True:
+    if test_scenario_3_errors():
         print("✅ test_scenario_3_errors réussi.\n")
     else:
         failures += 1

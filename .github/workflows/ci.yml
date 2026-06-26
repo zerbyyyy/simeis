@@ -8,11 +8,13 @@ on:
   push:
     branches: [ main ]
 
-# --- Optimisations globales (TP4) ---
-# Force Rust à optimiser les builds incrémentaux et active la couleur dans les terminaux de la CI
+# --- Optimisations globales et Résilience Réseau (TP4) ---
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  CARGO_HTTP_MULTIPLEXING: "false" # Utilise l'outil Git du système, beaucoup plus stable pour les gros téléchargements
 
 # Annule automatiquement les builds obsolètes si un nouveau commit est poussé (TP3.5 & TP4)
 concurrency:
@@ -101,14 +103,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # OPTIMISATION SÉCURISÉE (TP4) : Téléchargement du binaire pré-compilé officiel (Zéro erreur 404)
-      - name: Install Precompiled cargo-tarpaulin
-        run: |
-          echo "=== Téléchargement direct de cargo-tarpaulin ==="
-          wget https://github.com/xd009642/tarpaulin/releases/download/0.27.3/cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz
-          tar -xvf cargo-tarpaulin-x86_64-unknown-linux-musl.tar.gz
-          sudo mv cargo-tarpaulin /usr/local/bin/
-          cargo tarpaulin --version
+      # FIX TP4 : Installation propre et robuste de tarpaulin via l'action communautaire (plus rapide et sans bug de dossier)
+      - name: Install cargo-tarpaulin via Action
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-tarpaulin --version 0.27.3 --locked
 
       - name: Evaluate Code Coverage & Labeling
         env:
@@ -118,11 +118,11 @@ jobs:
           cargo tarpaulin --out stdout > coverage_report.txt
           cat coverage_report.txt
           
-          # Extraction du pourcentage (gestion robuste de la chaîne textuelle)
+          # Extraction du pourcentage
           COVERAGE_RAW=$(grep -oE '[0-9.]+%' coverage_report.txt | head -n 1 | tr -d '%')
           echo "Pourcentage brut de code coverage : $COVERAGE_RAW%"
           
-          # Extraction de la partie entière pour éviter l'utilisation de 'bc' qui est absent par défaut
+          # Extraction de la partie entière
           COVERAGE_INT=${COVERAGE_RAW%.*}
           if [ -z "$COVERAGE_INT" ]; then COVERAGE_INT=0; fi
           echo "Valeur entière retenue pour le test : $COVERAGE_INT%"

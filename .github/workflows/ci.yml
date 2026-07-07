@@ -14,7 +14,7 @@ env:
   CARGO_INCREMENTAL: "0"
   CARGO_NET_RETRY: "10"
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-  CARGO_HTTP_MULTIPLEXING: "false" # Utilise l'outil Git du système, beaucoup plus stable pour les gros téléchargements
+  CARGO_HTTP_MULTIPLEXING: "false" # Évite les bugs HTTP2 framing layer sur crates.io
 
 # Annule automatiquement les builds obsolètes si un nouveau commit est poussé (TP3.5 & TP4)
 concurrency:
@@ -103,7 +103,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # FIX TP4 : Installation propre et robuste de tarpaulin via l'action communautaire (plus rapide et sans bug de dossier)
+      # FIX TP4 : Installation propre et robuste de tarpaulin via l'action communautaire
       - name: Install cargo-tarpaulin via Action
         uses: actions-rs/cargo@v1
         with:
